@@ -12,6 +12,8 @@
 :root{--bg:#fafafa;--fg:#0a0a0a;--mut:#666;--acc:#0f172a;--line:#e5e5e5;--code:#f4f4f5}
 *{box-sizing:border-box}body{margin:0;font-family:ui-sans-system,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--fg);background:var(--bg);line-height:1.6}
 a{color:#0f172a;text-decoration:none;border-bottom:1px solid #cbd5e1}a:hover{border-bottom-color:#0f172a}
+nav{display:flex;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+nav a{font-weight:600;color:#0f172a;text-decoration:none;border:none}nav a.active{border-bottom:2px solid #0f172a}
 header,section,footer{max-width:980px;margin:0 auto;padding:28px 20px}
 .hero{padding:56px 20px 32px;background:#fff;border-bottom:1px solid var(--line)}
 h1{font-size:42px;line-height:1;font-weight:800;letter-spacing:-0.02em;margin:0}h1 span{font-weight:400;color:var(--mut);font-size:18px;display:block;margin-top:6px}
@@ -35,7 +37,7 @@ footer{border-top:1px solid var(--line);color:var(--mut);font-size:13px}
 </style>
 </head>
 <body>
-<nav style="display:flex;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;max-width:980px;margin:0 auto"><a href="/" style="font-weight:800">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" style="margin-left:auto">GitHub</a></nav>
+<nav><a href="/" style="font-weight:800">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" style="margin-left:auto">GitHub</a></nav>
 <!-- 1. Hero -->
 <header class="hero">
   <h1>rissa <span>pays homage to Jorma Rissanen - MDL 1978</span></h1>
@@ -50,9 +52,9 @@ footer{border-top:1px solid var(--line);color:var(--mut);font-size:13px}
   <div class="install"><span class="mut">$</span> pip install rissa-compress<br><span class="mut">$</span> rissa input.bin -o output.rissa<br><span class="mut">$</span> rissa -d output.rissa -o restored.bin</div>
 
   <div class="btns">
-    <a class="btn" href="https://github.com/your/rissa">GitHub Repo →</a>
+    <a class="btn" href="https://github.com/DEADTUNA4/rissa">GitHub Repo →</a>
     <a class="btn sec" href="#benchmarks">View Benchmarks</a>
-    <a class="btn sec" href="https://github.com/your/rissa/blob/main/deep_compress/THEORY.md">Read Specification</a>
+    <a class="btn sec" href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/THEORY.md">Read Specification</a>
   </div>
   <div class="mut" style="margin-top:10px;font-size:12px">Apache 2.0 · <code>MAGIC RISA v3</code> · <code>.rissa</code> · <code>pip install rissa-compress</code></div>
 </header>
@@ -84,7 +86,7 @@ footer{border-top:1px solid var(--line);color:var(--mut);font-size:13px}
     <tr><td><strong>3</strong></td><td>Entropy Coder</td><td>Order-0 Huffman / rANS range coding (<code>huffman.py</code> → <code>rans.py</code>, 512B header → 0.4% at 128K)</td></tr>
     <tr><td><strong>4</strong></td><td>Predictor Ensemble</td><td>Optional high-ratio mixing predictors (<code>--ultra</code> mode)</td></tr>
   </table>
-  <p class="mut">Streaming: <code>for block in stream</code> without whole-file RAM. Format <code>RISA v3</code> 64K/128K, deterministic, versioned. Details <a href="https://github.com/your/rissa/blob/main/deep_compress/ARCHITECTURE.md">ARCHITECTURE.md</a> · Equation is Rissanen MDL.</p>
+  <p class="mut">Streaming: <code>for block in stream</code> without whole-file RAM. Format <code>RISA v3</code> 64K/128K, deterministic, versioned. Details <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/ARCHITECTURE.md">ARCHITECTURE.md</a> · Equation is Rissanen MDL.</p>
 </section>
 
 <!-- 4. Benchmarks -->
@@ -99,7 +101,7 @@ footer{border-top:1px solid var(--line);color:var(--mut);font-size:13px}
     <tr><td>Silesia dickens 2MB (text)</td><td class="num">2.0M</td><td class="num"><strong>586K</strong></td><td class="num">592K</td><td class="num">714K <span class="badge">RAW</span></td><td class="num">-21% need dict</td></tr>
     <tr><td>Loghub HDFS 287K</td><td class="num">287K</td><td class="num"><strong>42K</strong></td><td class="num">42K</td><td class="num">44K</td><td class="num">+4% header</td></tr>
   </table>
-  <p class="mut">Reproduce: <code>python deep_compress/download_corpora.py</code> · <code>python deep_compress/final_bench.py</code> · Full <a href="https://github.com/your/rissa/blob/main/deep_compress/PHASE3_REPORT.md">PHASE3_REPORT.md</a>. Synthetic Counter/Mixed are synthetic, not sensor.</p>
+  <p class="mut">Reproduce: <code>python deep_compress/download_corpora.py</code> · <code>python deep_compress/final_bench.py</code> · Full <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/PHASE3_REPORT.md">PHASE3_REPORT.md</a>. Synthetic Counter/Mixed are synthetic, not sensor.</p>
 </section>
 
 <!-- 5. Code -->
@@ -131,10 +133,10 @@ rissa --help</pre>
 
 <footer>
   <h2 style="font-size:16px">Open Source & License</h2>
-  <p><strong>License: Apache 2.0</strong> - Open-Source & Patent-Safe. See <a href="https://github.com/your/rissa/blob/main/LICENSE">LICENSE</a></p>
-  <p>Author / Links: <a href="https://github.com/your/rissa">GitHub Repository</a> · <a href="https://github.com/your/rissa/issues">Issue Tracker</a> · <a href="https://pypi.org/project/rissa-compress/">PyPI rissa-compress</a></p>
+  <p><strong>License: Apache 2.0</strong> - Open-Source & Patent-Safe. See <a href="https://github.com/DEADTUNA4/rissa/blob/main/LICENSE">LICENSE</a></p>
+  <p>Author / Links: <a href="https://github.com/DEADTUNA4/rissa">GitHub Repository</a> · <a href="https://github.com/DEADTUNA4/rissa/issues">Issue Tracker</a> · <a href="https://pypi.org/project/rissa-compress/">PyPI rissa-compress</a></p>
   <p>References: Jorma Rissanen (MDL, 1978) · A.N. Kolmogorov (1965) · Duda rANS · Mahoney PAQ</p>
-  <p class="mut">Docs: <a href="https://github.com/your/rissa/blob/main/deep_compress/THEORY.md">THEORY.md</a> · <a href="https://github.com/your/rissa/blob/main/README.md">README.md</a> · Built with MDL <code>Compressed = min_T [Cost(T)+Cost(Model)+Cost(Data|Model)]</code></p>
+  <p class="mut">Docs: <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/THEORY.md">THEORY.md</a> · <a href="https://github.com/DEADTUNA4/rissa/blob/main/README.md">README.md</a> · Built with MDL <code>Compressed = min_T [Cost(T)+Cost(Model)+Cost(Data|Model)]</code></p>
 </footer>
 
 <script>katex.render("\\text{Compressed} = \\min_{T} \\left[ \\text{Cost}(T) + \\text{Cost}(\\text{Model}) + \\text{Cost}(\\text{Data} \\mid \\text{Model}) \\right]", document.getElementById('eq'), {displayMode:true, throwOnError:false});</script>
@@ -145,7 +147,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBu8BUXYgPo8fZ-2VQL4owbiF4gvxgztR8",
   authDomain: "makingthings-easier.firebaseapp.com",
   databaseURL: "https://makingthings-easier-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "makinghings-eastier",
+  projectId: "makingthings-easier",
   storageBucket: "makingthings-easier.firebasestorage.app",
   messagingSenderId: "643814447266",
   appId: "1:643814447266:web:cae302a877d266c51fdffb",
