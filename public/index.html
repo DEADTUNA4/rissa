@@ -1,23 +1,37 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>rissa — Context-Selecting Compression Engine</title><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="rissa pays homage to Jorma Rissanen MDL 1978 - adaptive compression for structured, sensor, columnar data"><link rel="preconnect" href="https://cdn.jsdelivr.net"><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><style>:root{--bg:#fafafa;--fg:#0a0a0a;--mut:#666;--acc:#0f172a;--line:#e5e5e5;--code:#f4f4f5}*{box-sizing:border-box}body{margin:0;font-family:ui-sans-system,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--fg);background:var(--bg);line-height:1.6}a{color:#0f172a;text-decoration:none;border-bottom:1px solid #cbd5e1}a:hover{border-bottom-color:#0f172a}nav{display:flex;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}nav a{font-weight:600;color:#0f172a;text-decoration:none;border:none}nav a.active{border-bottom:2px solid #0f172a}header,section,footer{max-width:980px;margin:0 auto;padding:28px 20px}.hero{padding:56px 20px 32px;background:#fff;border-bottom:1px solid var(--line)}h1{font-size:42px;line-height:1;font-weight:800;letter-spacing:-0.02em;margin:0}h1 span{font-weight:400;color:var(--mut);font-size:18px;display:block;margin-top:6px}.subtitle{font-size:18px;color:#334155;margin:12px 0 0}.philo{background:var(--acc);color:#fff;border-radius:12px;padding:18px 20px;margin:20px 0 16px}.philo .label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-bottom:6px}.katex-display{margin:0!important}.install{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-family:ui-monospace,monospace;font-size:13px;overflow:auto}.btns{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 0}.btn{display:inline-flex;align-items:center;gap:8px;background:var(--acc);color:#fff;padding:10px 14px;border-radius:10px;font-weight:600;border:1px solid var(--acc);text-decoration:none}.btn.sec{background:#fff;color:var(--acc)}h2{font-size:22px;margin:28px 0 8px;letter-spacing:-0.01em}footer{border-top:1px solid var(--line);color:var(--mut);font-size:13px}.mut{color:var(--mut)}</style></head><body>
-<nav><a href="/" style="font-weight:800" class="active">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" style="margin-left:auto">GitHub</a></nav>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>rissa — Context-Selecting Compression</title><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="rissa pays homage to Jorma Rissanen MDL 1978 - adaptive compression for structured, sensor, columnar data"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script></head><body>
+<nav><div class="nav-inner"><a href="/" class="brand active">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
 <header class="hero">
+  <div style="max-width:980px;margin:0 auto;padding:0 20px">
   <h1>rissa <span>pays homage to Jorma Rissanen - MDL 1978</span></h1>
   <p class="subtitle">Context-Selecting Compression Engine for Structured, Sensor, and Columnar Data</p>
   <div class="philo"><div class="label">Core Philosophy - Minimum Description Length</div><div id="eq"></div><div style="margin-top:8px;font-size:13px;opacity:.8">A computable, context-selecting approximation of MDL [Rissanen 1978]. rissa searches 16 reversible transforms per 64K/128K block and keeps the exact MDL winner.</div></div>
   <div class="install"><span class="mut">$</span> pip install rissa-compress<br><span class="mut">$</span> rissa input.bin -o output.rissa<br><span class="mut">$</span> rissa -d output.rissa -o restored.bin</div>
-  <div class="btns"><a class="btn" href="https://github.com/DEADTUNA4/rissa">GitHub Repo →</a><a class="btn sec" href="/benchmarks.html">View Benchmarks</a><a class="btn sec" href="/how-it-works.html">How It Works</a></div>
-  <div class="mut" style="margin-top:10px;font-size:12px">Apache 2.0 · <code>MAGIC RISA v3</code> · <code>.rissa</code> · 16 transforms · 64K/128K · streaming</div>
+  <div class="btns"><a class="btn" href="https://github.com/DEADTUNA4/rissa">GitHub Repo</a><a class="btn sec" href="/benchmarks.html">View Benchmarks</a><a class="btn sec" href="/how-it-works.html">How It Works</a></div>
+  <div class="mut" style="margin-top:10px;font-size:12px">Apache 2.0 - <code>MAGIC RISA v3</code> - <code>.rissa</code> - 16 transforms - 64K/128K - streaming</div>
+  </div>
 </header>
 <section>
   <h2>Why rissa</h2>
-  <p>Standard <code>zstd</code>/<code>xz</code> use LZ77 + order-0 entropy. Great on text, miss math in 32-bit ints, IEEE754 floats, sensor records. rissa tries <code>DELTA_ZIGZAG</code>, <code>SHUFFLE_4</code>, <code>FLOAT_SPLIT</code>, <code>BIT_TRANSPOSE</code> per block and picks lowest <code>Cost(T)+Cost(Model)+Cost(Data|Model)</code>.</p>
-  <p><a href="/how-it-works.html">Learn how →</a> · <a href="/benchmarks.html">See benchmarks →</a> · <a href="/spec.html">Spec →</a></p>
+  <div class="grid">
+    <div class="card"><h3>The Gap</h3><p>Standard tools (<code>zstd</code>, <code>xz</code>, <code>gzip</code>) use LZ77 + order-0 entropy. Great on text, miss math in 32-bit ints, IEEE754 floats, sensor records.</p></div>
+    <div class="card"><h3>The Solution</h3><p>rissa evaluates <code>DELTA</code>, <code>SHUFFLE</code>, <code>FLOAT_SPLIT</code>, <code>BIT_TRANSPOSE</code> per block and picks the lowest <code>Cost(T)+Cost(Model)+Cost(Data|Model)</code>.</p><p><a href="/how-it-works.html">Learn how</a> - <a href="/benchmarks.html">See benchmarks</a></p></div>
+  </div>
+</section>
+<section>
+  <h2>Quick Start</h2>
+  <div class="grid">
+    <div><h3>Python</h3><pre>import rissa
+data = open("telemetry.bin","rb").read()
+compressed = rissa.compress(data, level=3)
+assert rissa.decompress(compressed) == data</pre></div>
+    <div><h3>CLI</h3><pre>rissa input.bin -o output.rissa --block 131072 --dict
+rissa -d output.rissa -o restored.bin</pre><p class="mut"><code>pip install rissa-compress</code> - <code>python -m deep_compress.rissa</code></p></div>
+  </div>
 </section>
 <footer>
-  <p><strong>License: Apache 2.0</strong> — See <a href="https://github.com/DEADTUNA4/rissa/blob/main/LICENSE">LICENSE</a></p>
-  <p><a href="https://github.com/DEADTUNA4/rissa">GitHub</a> · <a href="https://github.com/DEADTUNA4/rissa/issues">Issues</a> · <a href="https://pypi.org/project/rissa-compress/">PyPI</a> · Docs <a href="/docs.html">Docs</a> · <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/THEORY.md">THEORY.md</a></p>
-  <p class="mut">Jorma Rissanen (MDL 1978) · A.N. Kolmogorov (1965) · rissa.web.app</p>
+  <p><strong>Apache 2.0</strong> - See <a href="https://github.com/DEADTUNA4/rissa/blob/main/LICENSE">LICENSE</a> - <a href="https://github.com/DEADTUNA4/rissa">GitHub</a> - <a href="/docs.html">Docs</a></p>
+  <p class="mut">Jorma Rissanen (MDL 1978) - A.N. Kolmogorov (1965) - rissa.web.app</p>
 </footer>
 <script>katex.render("\\text{Compressed} = \\min_{T} \\left[ \\text{Cost}(T) + \\text{Cost}(\\text{Model}) + \\text{Cost}(\\text{Data} \\mid \\text{Model}) \\right]", document.getElementById('eq'),{displayMode:true,throwOnError:false});</script>
-<script type="module">import {initializeApp} from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";import {getAnalytics} from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";const c={apiKey:"AIzaSyBu8BUXYgPo8fZ-2VQL4owbiF4gvxgztR8",authDomain:"makingthings-easier.firebaseapp.com",databaseURL:"https://makingthings-easier-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"makingthings-easier",storageBucket:"makingthings-easier.firebasestorage.app",messagingSenderId:"643814447266",appId:"1:643814447266:web:cae302a877d266c51fdffb",measurementId:"G-X47SC6S1G4"};initializeApp(c);try{getAnalytics(initializeApp(c))}catch(e){}</script>
+<script type="module">import{initializeApp}from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";import{getAnalytics}from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";const c={apiKey:"AIzaSyBu8BUXYgPo8fZ-2VQL4owbiF4gvxgztR8",authDomain:"makingthings-easier.firebaseapp.com",databaseURL:"https://makingthings-easier-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"makingthings-easier",storageBucket:"makingthings-easier.firebasestorage.app",messagingSenderId:"643814447266",appId:"1:643814447266:web:cae302a877d266c51fdffb",measurementId:"G-X47SC6S1G4"};try{getAnalytics(initializeApp(c))}catch(e){}</script>
 </body></html>
