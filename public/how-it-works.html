@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>How it Works — rissa</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>:root{--bg:#fafafa;--fg:#0a0a0a;--mut:#666;--acc:#0f172a;--line:#e5e5e5;--code:#f4f4f5}*{box-sizing:border-box}body{margin:0;font-family:ui-sans-system,system-ui;color:var(--fg);background:var(--bg);line-height:1.6}a{color:#0f172a}header,section{max-width:980px;margin:0 auto;padding:24px 20px}nav{display:flex;gap:16px;flex-wrap:wrap;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}nav a{font-weight:600;border:none}nav a.active{border-bottom:2px solid #0f172a}h1{font-size:32px;margin:0}h2{font-size:22px;margin:24px 0 8px}h3{font-size:16px;margin:16px 0 6px}pre{background:#0b1220;color:#e2e8f0;padding:14px;border-radius:10px;overflow:auto;font-size:13px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}th,td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}th{background:#f8fafc}.mut{color:var(--mut)}</style></head><body>
+<nav><a href="/">rissa</a><a href="/how-it-works.html" class="active">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/tool.html">Tool</a><a href="https://github.com/DEADTUNA4/rissa">GitHub</a></nav>
+<header><h1>How rissa Works</h1><p class="mut">From MDL equation to 16 transforms per block — everything, how, why, what.</p>
+<div id="eq" style="background:#0f172a;color:#fff;padding:16px;border-radius:10px;margin:16px 0"></div>
+<p><strong>What:</strong> rissa is a context-selecting compressor. For each 64K/128K block it tries 16 reversible transforms and keeps the one with lowest <em>description length</em> <code>Cost(T)+Cost(Model)+Cost(Data|Model)</code> — Rissanen MDL 1978, Kolmogorov's uncomputable shortest program made tractable.</p>
+<p><strong>Why:</strong> LZ77 finds exact byte copies. Structured data copies are mathematical: <code>1,2,3,4</code> delta=1, 32-bit floats share exponent bytes, sensor timestamps delta~1 with jitter. LZ sees nothing, rissa sees <code>DELTA_ZIGZAG</code> or <code>SHUFFLE_4</code>.</p></header>
+<section>
+<h2>Does it work?</h2>
+<div class="card">
+<h3>Per-block MDL, not per-file</h3>
+<p>File ≠ one transform. <code>telemetry.bin</code> may have header (RAW), then float array (FLOAT_SPLIT), then counters (DELTA). rissa does per-block: <code>block 0: RAW (1+extra)</code>, <code>block 1: SHUFFLE_8 (1+extra)</code> — counts the 1-byte transform id + extra in size. 128K block = 0.4% header vs 3% at 16K.</p>
+<pre>for block in file.chunks(65536):
+  best = min( (len(backend(T(block)))+1+len(extra) for T in TRANSFORMS), key=size )
+  write(tid, extra, backend.encode(best))</pre>
+<p class="mut">Verified <code>deep_compress/test_roundtrip.py</code> 16T + 200 fuzz + truncated → ALL PASSED. Deterministic (sorted TRANSFORMS, no hash).</p>
+</div>
+<h2>What transforms (16)</h2>
+<table><tr><th>Transform</th><th>Function</th><th>When</th></tr>
+<tr><td><code>DELTA</code></td><td><code>out[i]=in[i]-in[i-1]</code></td><td>Counters, mono ints</td></tr>
+<tr><td><code>DELTA_ZIGZAG</code></td><td>zigzag <code>(s<<1)^(s>>7)</code> for negatives</td><td>Gorilla timestamps with jitter -1</td></tr>
+<tr><td><code>DELTA2</code> / <code>DELTA2_ZIGZAG</code></td><td>double delta</td><td>Linear ramps</td></tr>
+<tr><td><code>XOR_DELTA</code></td><td><code>xor prev</code></td><td>Near-duplicate blocks</td></tr>
+<tr><td><code>SHUFFLE_2/4/8</code></td><td>columnar transpose <code>a0b0c0→aaa bbb</code></td><td>32/64-bit ints/floats (Parquet/Blosc)</td></tr>
+<tr><td><code>FLOAT_SPLIT</code></td><td>4-stream IEEE754</td><td>Float arrays</td></tr>
+<tr><td><code>BIT_TRANSPOSE</code></td><td>8×8 bit matrix</td><td>64-bit columns, low mantissa noise</td></tr>
+<tr><td><code>SHUFFLE4_DELTA</code></td><td>SHUFFLE→DELTA composition</td><td>Columnar + delta (v3 stacked)</td></tr>
+<tr><td><code>BWT_MTF / BWT_MTF_RLE</code></td><td>BWT→MTF→RLE(4-zero marker)</td><td>Text, after MTF many zeros</td></tr>
+<tr><td><code>ORDER2</code></td><td><code>2*prev - prev2</code></td><td>Text-like</td></tr>
+</table>
+<p class="mut">All reversible, size-preserving, cost of <code>extra</code> (1B stride, 2B BWT primary) counted. Next: XOR-with-prev-block (needs inter-block state) flagged v4.</p>
+
+<h2>With what does it work?</h2>
+<p><strong>Backends:</strong> <code>zstd -19/-22</code>, <code>xz -9</code> (<code>lzma</code>), <code>zlib</code>, <code>huffman</code> → <code>rans</code> (<code>deep_compress/rans.py</code> reports bits/sym vs Shannon). Per-block transform then backend.</p>
+<p><strong>Dictionary:</strong> 1MB sample → 64KB header via <code>zstandard.train_dictionary</code> fallback 6-grams, MDL-gated (only if <code>with+dict &lt; without</code>) — <code>compressor_v3.py:12</code>.</p>
+
+<h2>With what file types?</h2>
+<ul>
+<li><strong>IoT/Sensor:</strong> NOAA binary (ts+float) 500K `SHUFFLE_8` ties `xz` 290K, beats `zstd` 353K</li>
+<li><strong>Logs:</strong> Loghub text → `RAW` (no win, correctly falls back, header 0.4%)</li>
+<li><strong>Columnar:</strong> Yellow Taxi parquet 2MB already compressed (ent 8.00) → tie at Shannon limit `~1.99M` with `SHUFFLE_8`/`BIT_TRANSPOSE` on residual</li>
+<li><strong>Silesia text:</strong> per-block alone loses cross-block (+51% dickens without dict) — needs shared dict on >1MB.</li>
+</ul>
+</section>
+<script>katex.render("\\text{Compressed} = \\min_{T} \\left[ \\text{Cost}(T) + \\text{Cost}(\\text{Model}) + \\text{Cost}(\\text{Data} \\mid \\text{Model}) \\right]", document.getElementById('eq'),{displayMode:true,throwOnError:false});</script>
+</body></html>
