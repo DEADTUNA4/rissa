@@ -1,29 +1,83 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Spec — rissa</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Spec — rissa v4.1</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><style>pre{position:relative}pre button{position:absolute;top:8px;right:8px;background:#1e293b;color:#fff;border:1px solid #334155;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer}pre button:hover{background:#334155}</style></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html" class="active">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
-<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Format Spec — <code>MAGIC RISA v3</code></h1><p class="mut"><code>.rissa</code> — deterministic, versioned, streaming.</p></header>
+<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Format Spec — <code>MAGIC RISA v4.1</code></h1><p class="mut"><code>.rissa</code> — deterministic, versioned, streaming. Updated from <code>v3 (64K/128K)</code> to <code>v4.1 (1M/4M adaptive)</code></p></header>
 <section>
-<pre>File := MAGIC(4) VER(1) BACKEND(1) NUM_BLOCKS(4) BLOCK_SIZE(4) DICT_LEN(4) DICT? [DICT]
+<h2>Overview</h2>
+<pre><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText)">Copy</button><code>File := MAGIC(4) VER(1) BACKEND(1) NUM_BLOCKS(4) BLOCK_SIZE(4) DICT_LEN(4) DICT_ORIG_LEN(4) DICT? [DICT_COMP]
         { Block }*
 Block:= TID(1) EXTRA_LEN(1) ORIG_LEN(4) COMP_LEN(4) EXTRA? COMP
-MAGIC = 0x52 49 53 41 "RISA" (rissa)
-VER   = 3 (legacy DCM2/DCMP auto-migrated)
-BACKEND 0=huffman 1=zlib 2=lzma 3=zstd
-TID 0=RAW 1=DELTA 2=XOR_DELTA 3=DELTA2 4=MTF 5=BWT_MTF 6=SHUFFLE_2 7=SHUFFLE_4 8=SHUFFLE_8
-    9=DELTA_ZIGZAG 10=DELTA2_ZIGZAG 11=ORDER2 12=BWT_MTF_RLE 13=FLOAT_SPLIT 14=BIT_TRANSPOSE 15=SHUFFLE4_DELTA
-EXTRA 0-2B: BWT primary >H, SHUFFLE stride 1B, else 0
-COMP  = backend( transform(block) )  e.g. zstd(level)
-</pre>
+# All integers big-endian >I / >H</code></pre>
+
+<h2>Header</h2>
+<table><tr><th>Field</th><th>Size</th><th>Value</th></tr>
+<tr><td><code>MAGIC</code></td><td>4</td><td><code>0x52 49 53 41</code> <code>"RISA"</code> (was <code>DCM2</code> legacy)</td></tr>
+<tr><td><code>VER</code></td><td>1</td><td><code>4</code> = v4.1 1M/4M adaptive (was 3 = 64K/128K)</td></tr>
+<tr><td><code>BACKEND</code></td><td>1</td><td><code>0=huffman</code> <code>1=zlib</code> <code>2=lzma</code> <code>3=zstd</code></td></tr>
+<tr><td><code>NUM_BLOCKS</code></td><td>4</td><td><code>>I</code> — 1 for <code>&lt;=4M</code> single block, else <code>ceil(len/1M)</code></td></tr>
+<tr><td><code>BLOCK_SIZE</code></td><td>4</td><td><code>>I</code> 4096, 16384, 65536, 131072, <strong>1048576, 4194304</strong> or <code>len(data)</code> for single</td></tr>
+<tr><td><code>DICT_LEN</code></td><td>4</td><td><code>>I</code> compressed dict length (0 if none)</td></tr>
+<tr><td><code>DICT_ORIG_LEN</code></td><td>4</td><td><code>>I</code> original dict length</td></tr>
+<tr><td><code>DICT_COMP</code></td><td>var</td><td><code>lzma.compress(dict, preset=9)</code> if <code>DICT_LEN>0</code></td></tr>
+</table>
+<pre><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText)">Copy</button><code># Example header for v4.1 1M without dict (hex):
+# 52 49 53 41 04 03 03 00 00 00 01 00 10 00 00 00 00 00 00 00 00 00 00
+#  R  I  S  A  v4 zstd 1 block 1M     no dict</code></pre>
+
+<h2>Blocks</h2>
+<table><tr><th>Field</th><th>Size</th><th>Note</th></tr>
+<tr><td><code>TID</code></td><td>1</td><td>Transform ID 0-16, 99, 100</td></tr>
+<tr><td><code>EXTRA_LEN</code></td><td>1</td><td>0-2, or 4 for BWT_SUBBLOCK</td></tr>
+<tr><td><code>ORIG_LEN</code></td><td>4</td><td><code>>I</code> original block length</td></tr>
+<tr><td><code>COMP_LEN</code></td><td>4</td><td><code>>I</code> compressed payload length</td></tr>
+<tr><td><code>EXTRA</code></td><td>var</td><td>BWT primary <code>>H</code> 2B, SHUFFLE stride 1B <code>0x02/04/08</code>, BWT_SUBBLOCK <code>>H sub_size + >H num + 2*num primaries</code></td></tr>
+<tr><td><code>COMP</code></td><td>var</td><td><code>backend(transform(block))</code> e.g. <code>zstd(level=19)</code></td></tr>
+</table>
+<p class="mut">For single-block <code>&lt;=4M</code> file, overhead <code>4+1+1+4+4+8 + per-block 10 = 32B</code> (was 600B with 5×1M).</p>
+
+<h2>Transform IDs — v4.1 (16 + 2 special)</h2>
+<table><tr><th>TID</th><th>Name</th><th>Extra</th><th>When</th></tr>
+<tr><td>0</td><td><code>RAW</code></td><td><code>b""</code></td><td>fallback</td></tr>
+<tr><td>1</td><td><code>DELTA</code></td><td><code>b""</code></td><td>counters</td></tr>
+<tr><td>2</td><td><code>XOR_DELTA</code></td><td><code>b""</code></td><td>near-duplicate</td></tr>
+<tr><td>3</td><td><code>DELTA2</code></td><td><code>b""</code></td><td>linear ramps</td></tr>
+<tr><td>4</td><td><code>MTF</code></td><td><code>b""</code></td><td>after BWT</td></tr>
+<tr><td>5</td><td><code>BWT_MTF</code></td><td><code>>H</code> primary</td><td>text ≤256K (radix 2-byte)</td></tr>
+<tr><td>6</td><td><code>SHUFFLE_2</code></td><td><code>b"\x02"</code></td><td>columnar 2B</td></tr>
+<tr><td>7</td><td><code>SHUFFLE_4</code></td><td><code>b"\x04"</code></td><td>32-bit</td></tr>
+<tr><td>8</td><td><code>SHUFFLE_8</code></td><td><code>b"\x08"</code></td><td>64-bit</td></tr>
+<tr><td>9</td><td><code>DELTA_ZIGZAG</code></td><td><code>b""</code></td><td>Gorilla jitter</td></tr>
+<tr><td>10</td><td><code>DELTA2_ZIGZAG</code></td><td><code>b""</code></td><td>timestamps</td></tr>
+<tr><td>11</td><td><code>ORDER2</code></td><td><code>b""</code></td><td><code>2*prev - prev2</code></td></tr>
+<tr><td>12</td><td><code>BWT_MTF_RLE</code></td><td><code>>H</code></td><td>BWT+MTF+RLE 4-zero marker</td></tr>
+<tr><td>13</td><td><code>FLOAT_SPLIT</code></td><td><code>b"\x04"</code></td><td>IEEE754 4-stream</td></tr>
+<tr><td>14</td><td><code>BIT_TRANSPOSE</code></td><td><code>b""</code></td><td>8×8 bit matrix</td></tr>
+<tr><td>15</td><td><code>SHUFFLE4_DELTA</code></td><td><code>b"\x04"</code></td><td>composition <code>SHUFFLE→DELTA</code> (single TID, see cost note)</td></tr>
+<tr><td>16</td><td><code>BWT_SUBBLOCK</code></td><td><code>>H sub_size + >H num + 2*num primaries</code></td><td>1M→4×256K sub-blocks (v4.1)</td></tr>
+<tr><td>99</td><td><code>XOR_PREV</code></td><td><code>b"XORP"+>I</code></td><td>cross-block XOR (disabled in parallel, loud check)</td></tr>
+<tr><td>100</td><td><code>BIT_PLANE</code></td><td><code>b""</code></td><td>bit-plane separation</td></tr>
+</table>
+<p class="mut">Cost for <code>TID 15</code> is currently <code>1+len(extra)</code> single-T MDL — general <code>T1→T2</code> should be <code>Cost(T1)+Cost(T2)+Cost(Data|T1,T2)</code> (<code>transforms_v2.py:15</code> loud comment).</p>
+
 <h2>Streaming</h2>
-<p><code>compress_stream(in, out, block_size=131072, use_dict=False)</code> — <code>for block in stream</code> without whole-file RAM. Dict built from first 1MB, MDL-gated.</p>
+<pre><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText)">Copy</button><code>from deep_compress.compressor_v3 import compress_stream, decompress_stream
+with open('big.bin','rb') as fin, open('big.rissa','wb') as fout:
+    compress_stream(fin, fout, block_size=131072, use_dict=False)
+# for block in stream without whole-file RAM
+# xor_prev_block disabled in use_mp to avoid silent wrong decode</code></pre>
+
 <h2>Determinism</h2>
-<p>Sorted <code>TRANSFORMS_V2</code> iteration. Same input → same <code>.rissa</code>.</p>
-<h2>Python API</h2>
-<pre>import rissa
+<p>Sorted <code>TRANSFORMS_V2</code> iteration, no hash tie-break. Same input → same <code>.rissa</code>.</p>
+
+<h2>Python API — v4.1</h2>
+<pre><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText)">Copy</button><code>import rissa
 compressed = rissa.compress(data, level=3) # 1:3 2:6 3:19 4:22
 assert rissa.decompress(compressed) == data
-# or
-from deep_compress.compressor_v3 import compress_with_dict
-comp, hist, d = compress_with_dict(data, backend="zstd", block_size=131072, use_dict=True)</pre>
-<p class="mut">Source: <code>deep_compress/compressor_v3.py</code> <code>transforms_v2.py</code> <code>huffman.py→rans.py</code> Apache 2.0.</p>
+
+# Full v4.1 with dict and two-pass
+from deep_compress.compressor_v4 import compress_v4, decompress_v4
+comp, hist, d = compress_v4(data, backend="lzma", block_size=1048576, use_dict=True, use_two_pass=True, fast=False, force_dict=False)
+# Single block for &lt;=4M auto, or force: block_size=len(data)
+</code></pre>
+<p class="mut">Source: <code>deep_compress/compressor_v4.py</code> <code>transforms_v2.py</code> <code>huffman.py→rans.py</code> Apache 2.0. See <a href="/docs.html">Docs</a> for every variable.</p>
 </section>
 </body></html>
