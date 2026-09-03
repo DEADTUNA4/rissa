@@ -1,4 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
 <header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4 Pure CPU in-memory</h1><p class="mut">rissa v4 · 1M blocks · LZMA preset_dict · fast <code>zlib-1</code> → top2 <code>zstd19/xz9</code> · Reproduce: <code>python deep_compress/bench_two_modes.py</code> · <code>python deep_compress/final_bench.py</code></p>
 <p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD — ratio storage-independent, speed may be I/O-bound) · Pure CPU in-memory <code>rissa.compress(data)</code> (no HDD) vs Full pipeline I/O · Multiprocessing 12 threads max (6 RAM / 2-3 HDD) · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
@@ -66,4 +67,4 @@
 
 <p class="mut" style="text-align:center;margin-top:16px">↓ Older versions at bottom — see progress from 110% to -80%</p>
 </section>
-</body></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>
