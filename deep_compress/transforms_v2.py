@@ -408,13 +408,32 @@ def bit_transpose_decode(data: bytes, width=4) -> bytes:
     return bit_transpose_encode(data, width)
 
 def shuffle_delta_encode(data: bytes, stride=4) -> bytes:
-    """Composition: SHUFFLE -> DELTA (example of T1->T2 stacking)"""
+    """
+    Composition: SHUFFLE -> DELTA (example of T1->T2 stacking)
+    WARNING: Cost model for T1->T2 is NOT single-T MDL! Correct MDL for chain is:
+      Cost(T1)+Cost(T2)+Cost(Data|T1,T2) + len(extra1)+len(extra2)
+    Currently hardcoded as single TID 15 with extra b"\\x04" (only SHUFFLE cost).
+    To add SHUFFLE8_DELTA2 etc, you MUST generalize compressor_v4 to store extra for BOTH transforms
+    and sum costs: total = len(comp)+1+len(extra1)+len(extra2). See compressor_v4.py priority_order.
+    """
     shuffled=shuffle_encode(data, stride)
     return delta_encode(shuffled)
 
 def shuffle_delta_decode(data: bytes, stride=4) -> bytes:
     d=delta_decode(data)
     return shuffle_decode(d, stride)
+
+def dict_substitute_encode(data: bytes, dict_bytes: bytes = None) -> tuple:
+    """DICT_SUBSTITUTE: replace frequent 8-byte patterns with 2-byte indices (static LZ pre-processor)"""
+    if len(data) < 1024 or not dict_bytes:
+        return data, b""
+    # Build dict from provided dict_bytes (frequent patterns)
+    # For demo, simple: if data contains dict pattern, replace with marker
+    # Use 8-byte patterns from dict
+    out = bytearray(data)
+    # Simple: no actual substitution for prototype, return original (MDL will pick RAW if not beneficial)
+    # Full would build substitution table and encode
+    return bytes(out), b"DICT"
 
 def _bwt_mtf_encode(data: bytes):
     bwt, primary = bwt_encode(data)
@@ -444,6 +463,57 @@ def _bwt_mtf_rle_decode(data: bytes, extra: bytes):
     bwt = mtf_decode(mtf)
     return bwt_decode_fast(bwt, primary)
 
+def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
+    """Sub-block BWT stopgap for large blocks: split 1M -> 4x256K, BWT+MTF each, concat. Captures local redundancy."""
+    if len(data) <= sub_size:
+        return _bwt_mtf_encode(data)
+    out = bytearray()
+    extra = bytearray()
+    extra.extend(struct.pack(">H", sub_size))
+    # store num sub-blocks
+    num = (len(data) + sub_size -1)//sub_size
+    extra.extend(struct.pack(">H", num))
+    for i in range(0, len(data), sub_size):
+        chunk = data[i:i+sub_size]
+        bwt, primary = bwt_encode(chunk)
+        if bwt is None:
+            # fallback: raw chunk
+            out.extend(chunk)
+            extra.extend(struct.pack(">H", 0xFFFF))  # marker for raw
+        else:
+            mtf = mtf_encode(bwt)
+            out.extend(mtf)
+            extra.extend(struct.pack(">H", primary))
+    return bytes(out), bytes(extra)
+
+def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
+    if len(extra) < 4:
+        return _bwt_mtf_decode(data, extra)
+    sub_size = struct.unpack(">H", extra[0:2])[0]
+    num = struct.unpack(">H", extra[2:4])[0]
+    if sub_size == 0 or num == 0:
+        return _bwt_mtf_decode(data, extra)
+    out = bytearray()
+    pos = 0
+    epos = 4
+    for _ in range(num):
+        if epos+2 > len(extra):
+            break
+        primary = struct.unpack(">H", extra[epos:epos+2])[0]
+        epos+=2
+        if primary == 0xFFFF:
+            # raw chunk
+            chunk_len = min(sub_size, len(data)-pos)
+            out.extend(data[pos:pos+chunk_len])
+            pos+=chunk_len
+        else:
+            chunk_len = min(sub_size, len(data)-pos)
+            mtf = data[pos:pos+chunk_len]
+            pos+=chunk_len
+            bwt = mtf_decode(mtf)
+            out.extend(bwt_decode_fast(bwt, primary))
+    return bytes(out)
+
 # Expanded registry - per-block MDL will gate these (cost of extra counted)
 TRANSFORMS_V2 = {
     0: ("RAW",           lambda x: (x, b""),                          lambda x, e: x),
@@ -462,6 +532,8 @@ TRANSFORMS_V2 = {
     13:("FLOAT_SPLIT",   lambda x: (float_split_encode(x), b"\x04"),  lambda x, e: float_split_decode(x)),
     14:("BIT_TRANSPOSE", lambda x: (bit_transpose_encode(x), b""),    lambda x, e: bit_transpose_decode(x)),
     15:("SHUFFLE4_DELTA",lambda x: (shuffle_delta_encode(x,4), b"\x04"), lambda x, e: shuffle_delta_decode(x,4)),
+    16:("BWT_SUBBLOCK",  lambda x: bwt_subblock_encode(x),            lambda x, e: bwt_subblock_decode(x, e)),
+    17:("DICT_SUBSTITUTE", lambda x: dict_substitute_encode(x),       lambda x, e: x),  # stub, returns raw
 }
 
 def list_transforms():

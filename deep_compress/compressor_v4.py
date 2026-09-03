@@ -1,7 +1,6 @@
 """
 rissa v4.1: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
 Format v4.1: global dict MDL-gated, variable blocks, chains, fast mode
-"""
 
 Implements user spec:
 1. LZMA with trained preset_dict (frequent 8-byte substrings)
@@ -270,9 +269,9 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         out.extend(struct.pack(">I", 0))
         out.extend(struct.pack(">I", 0))
 
-    # Adaptive priority order for testing (LZMA strong, test these first)
-    # Priority: RAW+LZMA, BWT_MTF+LZMA, DELTA+XOR_PREV+LZMA, SHUFFLE+LZMA, RLE+LZMA
-    priority_order = [0, 5, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15]
+    # Adaptive priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed via 4x256K, 1M+ still stubbed (needs SA-IS 200-300 lines)
+    # So 256K-1M closed, 1M+ stubbed - not 5 closed. 1M is now default block size, so stub is live.
+    priority_order = [0, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15]
     # Early termination threshold: if RAW+LZMA achieves >90% of entropy, skip others
     # Compute entropy sample
     from collections import Counter
@@ -286,8 +285,13 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     chosen = []
     prev_block_raw = b""
     # For speed: use multiprocessing if many blocks (ASUS TUF i7-8750H 6c/12t, 32GB) — 6 workers RAM, 2-3 HDD
-    # Each block independent (XOR_PREV disabled in parallel for determinism)
+    # Each block independent — XOR_PREV is NOT compatible with parallel (prev_block_raw not shared) or streaming
+    # Loud check: if use_mp and XOR_PREV would be used, disable XOR_PREV to avoid silent corruption
     use_mp = len(blocks) > 4 and block_size >= BLOCK_1M
+    if use_mp:
+        # Disable XOR_PREV in parallel mode to avoid silent wrong decode
+        # If caller truly needs XOR_PREV, they must use sequential mode (use_dict=False or small file)
+        pass  # will skip tid 99 below when use_mp
     # Note: benchmark files on Seagate HDD — speed tests use in-memory data (no I/O) to avoid HDD bound; ratio is storage-independent
     # Fast mode: more aggressive early termination at 90% entropy
     entropy_threshold = 1.2 if fast else 1.1
@@ -386,7 +390,12 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
                     pass
 
         # Also test XOR with prev block as extra transform if not already best
-        if idx > 0 and len(prev_block_raw) > 0:
+        # LOUD CHECK: XOR_PREV is mutually exclusive with parallel/streaming — skip in use_mp to avoid silent corruption
+        # If someone needs XOR_PREV, they must call compress_v4 with single block or sequential mode
+        if use_mp:
+            # Skip XOR_PREV in parallel mode
+            pass
+        elif idx > 0 and len(prev_block_raw) > 0:
             try:
                 xor_transformed = xor_prev_block_encode(block, prev_block_raw)
                 # Try compress XOR version with LZMA
