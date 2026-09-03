@@ -1,0 +1,21 @@
+# rissa - https://rissa.web.app
+__pycache__/
+*.pyc
+*.pyo
+*.rissa
+*.rissa.tmp
+silesia/
+silesia.zip
+corpora/*.parquet
+corpora/*.csv
+corpora/*.log
+corpora/*.zip
+!corpora/.gitkeep
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+Thumbs.db
+.firebase/

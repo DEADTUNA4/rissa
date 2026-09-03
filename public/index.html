@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><meta charset='utf-8'><title>rissa — Rissanen 1978</title><meta name='viewport' content='width=device-width,initial-scale=1'><style>body{font-family:system-ui;max-width:720px;margin:40px auto;padding:0 20px}code{background:#f4f4f4;padding:2px 6px;border-radius:4px}pre{background:#111;color:#0f0;padding:16px;overflow:auto}</style></head><body>
+<h1>rissa</h1>
+<p><em>pays homage to Jorma Rissanen — Minimum Description Length (MDL) 1978</em></p>
+<p><code>rissa input.bin -o output.rissa</code> · <code>rissa -d input.rissa -o output.bin</code></p>
+<p><strong>Core:</strong> <code>Compressed = min_T [ Cost(T) + Cost(Model) + Cost(Data | Model) ]</code> — 16 transforms per 64K/128K block, exact MDL pick.</p>
+<pre>pip install zstandard
+git clone https://github.com/your/rissa && cd rissa
+python -m deep_compress.rissa input.bin -o output.rissa --block 131072
+python -m deep_compress.rissa -d output.rissa -o restored.bin</pre>
+<p>Theory: <a href='https://github.com/your/rissa/blob/main/deep_compress/THEORY.md'>THEORY.md</a> · Benchmarks: PHASE3_REPORT.md · <code>MAGIC RISA v3</code> <code>.rissa</code></p>
+<p><a href='https://github.com/your/rissa'>GitHub</a></p>
+</body></html>

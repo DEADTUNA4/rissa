@@ -1,0 +1,30 @@
+[project]
+name = "rissa-compress"
+version = "3.0.0"
+description = "rissa — Context-Selecting Compression Engine for Structured, Sensor, and Columnar Data (Rissanen MDL 1978) — https://rissa.web.app"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [{name="rissa", email="rissa@rissa.web.app"}]
+keywords = ["compression", "mdl", "rissanen", "columnar", "sensor"]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Archiving :: Compression"
+]
+dependencies = ["zstandard"]
+requires-python = ">=3.9"
+
+[project.scripts]
+rissa = "deep_compress.rissa:main"
+
+[project.urls]
+Homepage = "https://rissa.web.app"
+Repository = "https://github.com/your/rissa"
+Issues = "https://github.com/your/rissa/issues"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["deep_compress", "rissa"]
