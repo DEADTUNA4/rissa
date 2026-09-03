@@ -19,7 +19,7 @@ rissa -d output.rissa -o restored.bin
 Or from source:
 
 ```bash
-git clone https://github.com/your/rissa && cd rissa
+git clone https://github.com/DEADTUNA4/rissa && cd rissa
 pip install -e .
 python -m deep_compress.rissa input.bin -o output.rissa
 ```
@@ -122,7 +122,7 @@ rissa --help
 
 **License:** Apache 2.0 - Open-Source & Patent-Safe. See [`LICENSE`](LICENSE).
 
-**Links:** [GitHub Repository](https://github.com/your/rissa) · [Issue Tracker](https://github.com/your/rissa/issues) · [PyPI rissa-compress](https://pypi.org/project/rissa-compress/)
+**Links:** [GitHub Repository](https://github.com/DEADTUNA4/rissa) · [Issue Tracker](https://github.com/DEADTUNA4/rissa/issues) · [PyPI rissa-compress](https://pypi.org/project/rissa-compress/)
 
 **References:**
 - Jorma Rissanen - Minimum Description Length (MDL), 1978

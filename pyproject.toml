@@ -19,8 +19,8 @@ rissa = "deep_compress.rissa:main"
 
 [project.urls]
 Homepage = "https://rissa.web.app"
-Repository = "https://github.com/your/rissa"
-Issues = "https://github.com/your/rissa/issues"
+Repository = "https://github.com/DEADTUNA4/rissa"
+Issues = "https://github.com/DEADTUNA4/rissa/issues"
 
 [build-system]
 requires = ["setuptools"]
