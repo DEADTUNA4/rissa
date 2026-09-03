@@ -164,7 +164,7 @@ def _get_lzma_compressor(preset_dict: bytes, preset: int, dict_size: int = 64*10
     else:
         return lzma.LZMACompressor(preset=preset)
 
-def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, use_dict=True, use_two_pass=False, preset_dict_bytes=None, fast=False):
+def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, use_dict=True, use_two_pass=False, preset_dict_bytes=None, fast=False, force_dict=False, max_block=False):
     """
     v4 per-block MDL with LZMA preset_dict
     - larger blocks 1-4MB
@@ -172,17 +172,24 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     - adaptive priority + early termination
     - preset_dict stored in header
     fast: use preset 6+dict (2-3x faster), early 90% entropy stop
+    force_dict: force dict even if gate says no (debug)
+    max_block: if True and file <=15MB, use whole file as single block (max window)
     """
     # Fast mode: preset 6+dict compensates, early termination
     if fast:
         level = 6
     # Adaptive block size: header overhead per block is constant, use single block for <=4MB
+    # max_block: for 15MB file, use single block to maximize LZMA window
     file_size = len(data)
-    if file_size <= 4*1024*1024 and file_size > 0:
+    if max_block and file_size <= 15*1024*1024 and file_size > 0:
+        block_size = file_size
+    elif file_size <= 4*1024*1024 and file_size > 0:
         block_size = file_size  # single block eliminates header overhead
     elif block_size is None or block_size == DEFAULT_BLOCK:
         block_size = DEFAULT_BLOCK
     # else respect caller block_size for larger files
+    if force_dict:
+        print(f"[rissa] force_dict=True block_size={block_size} file_size={file_size}")
     import lzma, zlib
     try:
         import zstandard as zstd
@@ -200,7 +207,10 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
 
     # MDL gate dict: test actual gain, not just sample
     dict_to_use = None
-    if preset_dict_bytes and len(preset_dict_bytes) > 512:
+    if force_dict and preset_dict_bytes and len(preset_dict_bytes) > 512:
+        dict_to_use = preset_dict_bytes[:32768]
+        print(f"[rissa] forced dict {len(dict_to_use)}")
+    elif preset_dict_bytes and len(preset_dict_bytes) > 512:
         # Test on larger sample (256KB or full file if small) with actual LZMACompressor
         sample_size = min(256*1024, len(data)) if len(data) > 256*1024 else len(data)
         sample = data[:sample_size]
@@ -354,6 +364,9 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
                 best_extra = extra
                 best_payload = comp
                 best_name = name
+                # Hard early-stop for highly repetitive: <1% of raw (e.g., 5MB 'x' -> 0.3 MB/s -> tens MB/s if skipped)
+                if total < len(block) * 0.01:
+                    break
                 # Early termination: if we achieve near entropy (90% lower bound), stop — more aggressive in fast mode
                 if ent_bytes > 0 and total <= ent_bytes * entropy_threshold:
                     break
