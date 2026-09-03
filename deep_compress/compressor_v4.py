@@ -1,6 +1,7 @@
 """
-rissa v4: LZMA preset_dict killer feature + 1-4MB blocks + LZMA-aiding transforms
-Format v4: global dict in header (compressed), variable blocks, multi-transform chains
+rissa v4.1: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
+Format v4.1: global dict MDL-gated, variable blocks, chains, fast mode
+"""
 
 Implements user spec:
 1. LZMA with trained preset_dict (frequent 8-byte substrings)

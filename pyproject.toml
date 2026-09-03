@@ -1,6 +1,6 @@
 [project]
 name = "rissa-compress"
-version = "3.0.0"
+version = "4.1.0"
 description = "rissa - Context-Selecting Compression Engine for Structured, Sensor, and Columnar Data (Rissanen MDL 1978) - https://rissa.web.app"
 readme = "README.md"
 license = {text = "Apache-2.0"}
