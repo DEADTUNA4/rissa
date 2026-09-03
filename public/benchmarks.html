@@ -22,5 +22,48 @@
 
 <h2>Why not synthetic counters?</h2>
 <p>Synthetic <code>bytes([i%256])</code> is not sensor data. Real NOAA binary is <code>&lt;I fff&gt;</code> structs with jitter — needs <code>DELTA_ZIGZAG</code> + <code>SHUFFLE</code>. Use your 1MB+ raw dump in <code>corpora/</code>.</p>
+
+<h2>Version History — Scroll down to see older</h2>
+<p class="mut">Newest at top. See how far rissa has come from pure Huffman to LZMA preset_dict.</p>
+
+<details open style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v4 — 2026-09-03 — 1M blocks + preset_dict + CDC + fast</strong> <span class="badge">current</span></summary>
+<p class="mut">1M/4M adaptive single-block for &lt;=4M, CDC chunking, 16T incl BIT_TRANSPOSE/SHUFFLE4_DELTA, order-1 after BWT, fast preset 6+dict, 6 workers RAM</p>
+<table><tr><th>Corpus</th><th>xz -9</th><th>rissa v4</th><th>Speed</th></tr>
+<tr><td>Sensor 6MB</td><td class="num">1610772</td><td class="num"><strong>1038616 -35%</strong></td><td class="num">1.5 MB/s</td></tr>
+<tr><td>Columnar 3.6MB</td><td class="num">204160</td><td class="num"><strong>39432 -80%</strong></td><td class="num">1.1 MB/s</td></tr>
+<tr><td>JSON 15MB</td><td class="num">1744</td><td class="num">3762 +115%</td><td class="num">2.2 MB/s (needs dict tuning)</td></tr>
+</table>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v3 — 2026-09-02 — 64K/128K + shared dict + streaming</strong></summary>
+<p class="mut">16K → 64K/128K (0.4% header), streaming <code>for block in stream</code>, 1MB→64KB dict MDL-gated, 16T</p>
+<table><tr><th>Corpus</th><th>xz -9</th><th>rissa v3 128K</th><th>Hist</th></tr>
+<tr><td>NOAA binary 500K</td><td class="num">213K</td><td class="num">238K SHUFFLE_8 tie</td><td class="num">-78% vs zlib</td></tr>
+<tr><td>Silesia dickens 2MB</td><td class="num">586K</td><td class="num">714K RAW</td><td class="num">+21% need dict</td></tr>
+<tr><td>HDFS 287K</td><td class="num">42K</td><td class="num">44K</td><td class="num">+4% header</td></tr>
+</table>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v2 — 2026-09-01 — 16K per-block MDL + 9 transforms</strong></summary>
+<p class="mut">First MDL per 16K block, 9T (DELTA/SHUFFLE/BWT_MTF), Huffman 512B header = 3% overhead</p>
+<table><tr><th>Corpus</th><th>zlib</th><th>rissa v2</th></tr>
+<tr><td>Counter 5KB</td><td class="num">324</td><td class="num">71 DELTA -78%</td></tr>
+<tr><td>Run-length 5KB</td><td class="num">40 RLE</td><td class="num">33 zstd tie</td></tr>
+</table>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v1 — 2026-08-31 — Huffman + RLE baseline</strong></summary>
+<p class="mut">Order-0 Huffman, RLE — failed on delta data 110% of raw</p>
+<table><tr><th>Corpus</th><th>raw</th><th>rissa v1</th></tr>
+<tr><td>Counter 5KB</td><td class="num">5000</td><td class="num">1512 Huffman</td></tr>
+<tr><td>Delta counter 5K</td><td class="num">5000</td><td class="num">5512 +10% lose</td></tr>
+</table>
+</details>
+
+<p class="mut" style="text-align:center;margin-top:16px">↓ Older versions at bottom — see progress from 110% to -80%</p>
 </section>
 </body></html>
