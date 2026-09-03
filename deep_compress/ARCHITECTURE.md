@@ -1,6 +1,6 @@
-# rissa — Architecture Decisions (review response)
+# rissa - Architecture Decisions (review response)
 
-**rissa — Jorma Rissanen MDL 1978 — https://rissa.web.app — `rissa input -o output.rissa` (MAGIC `RISA` v3)**
+**rissa - Jorma Rissanen MDL 1978 - https://rissa.web.app - `rissa input -o output.rissa` (MAGIC `RISA` v3)**
 
 ## Transform Layer - Done
 - Added `DELTA_ZIGZAG` `transforms_v2.py:9` (signed delta -> zigzag, for Gorilla-style negative small deltas)

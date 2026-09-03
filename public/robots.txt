@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://rissa.web.app/sitemap.xml

@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks - rissa</title><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>:root{--bg:#fafafa;--fg:#0a0a0a;--mut:#666;--acc:#0f172a;--line:#e5e5e5}*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:var(--bg);color:var(--fg);line-height:1.6}nav{display:flex;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0}nav a{font-weight:600;color:#0f172a;text-decoration:none}nav a.active{border-bottom:2px solid #0f172a}header,section{max-width:980px;margin:0 auto;padding:24px 20px}h1{font-size:28px}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}th,td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}th{background:#f8fafc}td.num{text-align:right;font-variant-numeric:tabular-nums}.mut{color:var(--mut)}</style></head><body>
-<nav><a href="/">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/tool.html">Tool</a><a href="https://github.com/DEADTUNA4/rissa">GitHub</a></nav>
-<header><h1>Benchmarks — Real Data vs Shannon & zstd/xz</h1><p class="mut">128K MDL-gated 16T, fast <code>zlib-1</code> → top2 <code>zstd19</code>. Reproduce: <code>python deep_compress/final_bench.py</code></p></header>
+<nav><a href="/">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa">GitHub</a></nav>
+<header><h1>Benchmarks - Real Data vs Shannon & zstd/xz</h1><p class="mut">128K MDL-gated 16T, fast <code>zlib-1</code> → top2 <code>zstd19</code>. Reproduce: <code>python deep_compress/final_bench.py</code></p></header>
 <section>
 <h2>Target Datasets</h2>
 <ul><li><strong>IoT & Weather:</strong> NOAA float arrays & 64-bit timestamps (binary sensor, not csv)</li><li><strong>System Logs:</strong> Loghub JSON & structured syslogs (Apache/HDFS 2k)</li><li><strong>Columnar:</strong> NYC Yellow Taxi Parquet 46MB (already compressed, ent 8.00)</li></ul>
@@ -13,6 +13,6 @@
 </table>
 <p class="mut">Synthetic Counter 5KB: <code>zlib 324 → DELTA+zstd 71 -78%</code> proves transform, but real Silesia shows per-block without shared dict loses cross-block. Full <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/PHASE3_REPORT.md">PHASE3_REPORT.md</a> + <code>final_bench.py</code> 3 runs time ± stdev.</p>
 <h2>Why not synthetic counters?</h2>
-<p>Synthetic <code>bytes([i%256])</code> is not sensor data. Real NOAA binary is <code>&lt;I fff&gt;</code> structs (ts + temp/hum/pres) with jitter — needs <code>DELTA_ZIGZAG</code> + <code>SHUFFLE</code>. Use your 1MB+ raw dump in <code>corpora/</code>.</p>
+<p>Synthetic <code>bytes([i%256])</code> is not sensor data. Real NOAA binary is <code>&lt;I fff&gt;</code> structs (ts + temp/hum/pres) with jitter - needs <code>DELTA_ZIGZAG</code> + <code>SHUFFLE</code>. Use your 1MB+ raw dump in <code>corpora/</code>.</p>
 </section>
 </body></html>

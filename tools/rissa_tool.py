@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-rissa tool — Desktop GUI + CLI for rissa compression
-https://rissa.web.app — Jorma Rissanen MDL 1978
+rissa tool - Desktop GUI + CLI for rissa compression
+https://rissa.web.app - Jorma Rissanen MDL 1978
 
 Usage CLI:
   python tools/rissa_tool.py compress input.bin -o output.rissa --block 131072 --dict
@@ -39,7 +39,7 @@ def launch_gui():
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     root=tk.Tk()
-    root.title("rissa — Rissanen MDL 1978")
+    root.title("rissa - Rissanen MDL 1978")
     root.geometry("560x420")
     # style
     try:
@@ -131,7 +131,7 @@ def launch_gui():
     root.mainloop()
 
 if __name__=="__main__":
-    ap=argparse.ArgumentParser(prog="rissa_tool", description="rissa tool — https://rissa.web.app")
+    ap=argparse.ArgumentParser(prog="rissa_tool", description="rissa tool - https://rissa.web.app")
     sub=ap.add_subparsers(dest="cmd")
     c=sub.add_parser("compress", help="compress")
     c.add_argument("input"); c.add_argument("-o","--output", required=True); c.add_argument("--block", type=int, default=65536); c.add_argument("--dict", action="store_true", dest="use_dict")

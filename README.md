@@ -2,7 +2,7 @@
 
 **Context-Selecting Compression Engine for Structured, Sensor, and Columnar Data**
 
-`rissa` pays homage to **Jorma Rissanen** — Minimum Description Length (MDL) 1978. A fast, per-block adaptive compressor that beats generic LZ on time-series and columnar data.
+`rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978. A fast, per-block adaptive compressor that beats generic LZ on time-series and columnar data.
 
 **Live docs → https://rissa.web.app**
 
@@ -44,17 +44,17 @@ A computable, context-selecting approximation of Minimum Description Length (MDL
 
 ---
 
-## Architecture — 4-Layer Stack
+## Architecture - 4-Layer Stack
 
 | Layer | Component | Function |
 |-------|-----------|----------|
-| **1** | **Transform Search** | 16 per-block reversible transforms (`DELTA2_ZIGZAG`, `SHUFFLE_4`, `FLOAT_SPLIT`, `BIT_TRANSPOSE`, `SHUFFLE4_DELTA`) — `deep_compress/transforms_v2.py` |
-| **2** | **Global Dictionary** | Shared static/trained pass (1MB sample → 64KB header, MDL-gated) for cross-block redundancy — `deep_compress/compressor_v3.py` |
+| **1** | **Transform Search** | 16 per-block reversible transforms (`DELTA2_ZIGZAG`, `SHUFFLE_4`, `FLOAT_SPLIT`, `BIT_TRANSPOSE`, `SHUFFLE4_DELTA`) - `deep_compress/transforms_v2.py` |
+| **2** | **Global Dictionary** | Shared static/trained pass (1MB sample → 64KB header, MDL-gated) for cross-block redundancy - `deep_compress/compressor_v3.py` |
 | **3** | **Entropy Coder** | Order-0 Huffman / rANS range coding (`deep_compress/huffman.py` → `rans.py`) |
-| **4** | **Predictor Ensemble** | Optional high-ratio mixing predictors (`--ultra` mode) — `compressor_v3.py` |
+| **4** | **Predictor Ensemble** | Optional high-ratio mixing predictors (`--ultra` mode) - `compressor_v3.py` |
 
 - Streaming: `for block in stream` without whole-file RAM (`compress_stream`)
-- Format: `MAGIC RISA v3` `BLOCK 64K/128K` `ext .rissa` — deterministic, versioned
+- Format: `MAGIC RISA v3` `BLOCK 64K/128K` `ext .rissa` - deterministic, versioned
 
 Full theory → [`deep_compress/THEORY.md`](deep_compress/THEORY.md) · Architecture → [`deep_compress/ARCHITECTURE.md`](deep_compress/ARCHITECTURE.md)
 
@@ -68,16 +68,16 @@ Real data, not synthetic counters. `Silesia 12×212MB` + `NOAA` + `Loghub` + `NY
 |--------|-------|----------|-------------------|---------------------|
 | NOAA binary sensor 500K (ts+float) | 213K 3.41 | 292K | **238K** `SHUFFLE_8` 3.82 | 6.83 ent, -12% vs xz |
 | Yellow Taxi parquet 2MB (already compressed, ent 8.00) | 1,997K | 1,996K | **1,996K tie** `SHUFFLE_8` | 7.99 at Shannon limit |
-| Silesia `dickens` 2MB (text) | **586K** | 592K | 714K `RAW` | per-block loses cross-block dict — needs shared dict on >1MB |
+| Silesia `dickens` 2MB (text) | **586K** | 592K | 714K `RAW` | per-block loses cross-block dict - needs shared dict on >1MB |
 | Loghub `HDFS` 287K | **42K** | 42K | 44K `RAW` | small-file header overhead |
 
-> Per-block alone cannot beat `xz` 8MB window on general text — rissa wins where transforms expose structure (sensor/columnar). See [`deep_compress/PHASE3_REPORT.md`](deep_compress/PHASE3_REPORT.md) and run `python deep_compress/final_bench.py`.
+> Per-block alone cannot beat `xz` 8MB window on general text - rissa wins where transforms expose structure (sensor/columnar). See [`deep_compress/PHASE3_REPORT.md`](deep_compress/PHASE3_REPORT.md) and run `python deep_compress/final_bench.py`.
 
 Reproduce:
 
 ```bash
 python deep_compress/download_corpora.py   # Silesia + corpora
-python deep_compress/test_roundtrip.py     # 16T + 200 fuzz — ALL PASSED
+python deep_compress/test_roundtrip.py     # 16T + 200 fuzz - ALL PASSED
 python deep_compress/final_bench.py
 ```
 
@@ -120,14 +120,14 @@ rissa --help
 
 ## Open Source & License
 
-**License:** Apache 2.0 — Open-Source & Patent-Safe. See [`LICENSE`](LICENSE).
+**License:** Apache 2.0 - Open-Source & Patent-Safe. See [`LICENSE`](LICENSE).
 
 **Links:** [GitHub Repository](https://github.com/your/rissa) · [Issue Tracker](https://github.com/your/rissa/issues) · [PyPI rissa-compress](https://pypi.org/project/rissa-compress/)
 
 **References:**
-- Jorma Rissanen — Minimum Description Length (MDL), 1978
-- A.N. Kolmogorov — Kolmogorov Complexity, 1965
-- Duda — Asymmetric Numeral Systems (rANS)
-- Mahoney — PAQ / Context Mixing
+- Jorma Rissanen - Minimum Description Length (MDL), 1978
+- A.N. Kolmogorov - Kolmogorov Complexity, 1965
+- Duda - Asymmetric Numeral Systems (rANS)
+- Mahoney - PAQ / Context Mixing
 
 **Docs:** https://rissa.web.app

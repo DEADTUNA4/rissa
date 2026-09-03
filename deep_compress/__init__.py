@@ -1,4 +1,4 @@
-"""rissa — https://rissa.web.app"""
+"""rissa - https://rissa.web.app"""
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from .compressor_v3 import compress_with_dict, decompress_with_dict

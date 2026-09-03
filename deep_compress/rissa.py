@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-rissa — Jorma Rissanen MDL 1978 — https://rissa.web.app
+rissa - Jorma Rissanen MDL 1978 - https://rissa.web.app
 CLI: rissa input.bin -o output.rissa  |  rissa -d input.rissa -o output.bin
 """
 import argparse, sys, pathlib, os
@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from compressor_v3 import compress_with_dict, decompress_with_dict, BLOCK_SIZE_64K, BLOCK_SIZE_128K, MAGIC
 
 def main():
-    p=argparse.ArgumentParser(prog="rissa", description="rissa — Adaptive MDL Compressor (Rissanen 1978) — https://rissa.web.app")
+    p=argparse.ArgumentParser(prog="rissa", description="rissa - Adaptive MDL Compressor (Rissanen 1978) - https://rissa.web.app")
     p.add_argument("input", nargs="?", help="input file (or stdin if not given)")
     p.add_argument("-o","--output", required=True, help="output file (.rissa)")
     p.add_argument("-d","--decompress", action="store_true", help="decompress")

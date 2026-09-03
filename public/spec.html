@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Spec — rissa</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Spec - rissa</title><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>:root{--bg:#fafafa;--fg:#0a0a0a;--mut:#666;--acc:#0f172a;--line:#e5e5e5}*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:var(--bg);color:var(--fg);line-height:1.6}nav{display:flex;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0}nav a{font-weight:600;color:#0f172a;text-decoration:none}nav a.active{border-bottom:2px solid #0f172a}header,section{max-width:980px;margin:0 auto;padding:24px 20px}pre{background:#0b1220;color:#e2e8f0;padding:14px;border-radius:10px;overflow:auto;font-size:12px}.mut{color:var(--mut)} table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line)}th,td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px}th{background:#f8fafc}</style></head><body>
-<nav><a href="/">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html" class="active">Spec</a><a href="/tool.html">Tool</a><a href="https://github.com/DEADTUNA4/rissa">GitHub</a></nav>
-<header><h1>Format Spec — <code>MAGIC RISA v3</code></h1><p class="mut"><code>.rissa</code> — deterministic, versioned, streaming.</p></header>
+<nav><a href="/">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html" class="active">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa">GitHub</a></nav>
+<header><h1>Format Spec - <code>MAGIC RISA v3</code></h1><p class="mut"><code>.rissa</code> - deterministic, versioned, streaming.</p></header>
 <section>
 <pre>File := MAGIC(4) VER(1) BACKEND(1) NUM_BLOCKS(4) BLOCK_SIZE(4) DICT_LEN(4) DICT? [DICT]
         { Block }*
@@ -15,7 +15,7 @@ EXTRA 0-2B: BWT primary >H, SHUFFLE stride 1B, else 0
 COMP  = backend( transform(block) )  e.g. zstd(level)
 </pre>
 <h2>Streaming</h2>
-<p><code>compress_stream(in, out, block_size=131072, use_dict=False)</code> — <code>for block in stream</code> without whole-file RAM. Dict built from first 1MB, MDL-gated (<code>with+dict &lt; without</code>).</p>
+<p><code>compress_stream(in, out, block_size=131072, use_dict=False)</code> - <code>for block in stream</code> without whole-file RAM. Dict built from first 1MB, MDL-gated (<code>with+dict &lt; without</code>).</p>
 <h2>Determinism</h2>
 <p>Sorted <code>TRANSFORMS_V2</code> iteration, no hash tie-break. Same input → same <code>.rissa</code>.</p>
 <h2>Python API</h2>

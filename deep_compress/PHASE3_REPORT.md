@@ -1,4 +1,4 @@
-# Phase 3 Report — Real Corpus Evaluation (64K/128K + Shared Dict + 16 Transforms)
+# Phase 3 Report - Real Corpus Evaluation (64K/128K + Shared Dict + 16 Transforms)
 
 **Ingested:** `corpora/` 4 real files (downloaded via curl resume):
 - `yellow_tripdata_2023-01.parquet` 46,949,719B (NYC TLC, columnar)
@@ -25,14 +25,14 @@ Synthetic reference (binary, not csv):
 - YellowTaxi columnar synthetic 500K: xz 304K vs ours 323K close.
 
 ## Analysis
-- **Logs (text):** `RAW` wins, no shuffle/delta benefit. Per-block header (1+extra+4+4 per block) makes 64K/128K win over 16K (171K: 7,862→7,513) but still +3-4% vs xz large-window (8MB dict). Expected — shared dict `compressor_v3.py:12` adds +64KB overhead on <1MB files (Apache `dict True` 61K vs 7K) — MDL must gate dict off for <1MB (currently bench shows both, winning is `dict=False`). Needs >1MB real corpus to amortize.
+- **Logs (text):** `RAW` wins, no shuffle/delta benefit. Per-block header (1+extra+4+4 per block) makes 64K/128K win over 16K (171K: 7,862→7,513) but still +3-4% vs xz large-window (8MB dict). Expected - shared dict `compressor_v3.py:12` adds +64KB overhead on <1MB files (Apache `dict True` 61K vs 7K) - MDL must gate dict off for <1MB (currently bench shows both, winning is `dict=False`). Needs >1MB real corpus to amortize.
 - **NOAA csv (text):** Same, csv is text not binary float → `FLOAT_SPLIT` not triggered, `SHUFFLE` not. Binary sensor (synthetic) _does_ win (`SHUFFLE_8`), proving need for raw binary sensor data, not csv.
-- **Yellow Taxi parquet (already compressed, entropy 8.00):** All tie at ~100.2% over Shannon — correct fallback to RAW with minimal overhead, picks `BIT_TRANSPOSE`/`SHUFFLE` on residual columnar blocks where structure remains. Validates Known Limitations (no magic on high-entropy).
+- **Yellow Taxi parquet (already compressed, entropy 8.00):** All tie at ~100.2% over Shannon - correct fallback to RAW with minimal overhead, picks `BIT_TRANSPOSE`/`SHUFFLE` on residual columnar blocks where structure remains. Validates Known Limitations (no magic on high-entropy).
 - **Shannon distance:** Logs are ~60% shannon, our `b/sym` within 0.05 of xz; parquet is 99.6% shannon, all at shannon limit.
 
 ## Next for Phase 3
 1. Replace `noaa csv` with raw binary sensor (e.g., NOAA ISD binary or your sensor dump) to trigger `FLOAT_SPLIT`/`SHUFFLE4_DELTA`.
-2. Yellow Taxi: ingest decompressed CSV (convert parquet via `pyarrow`) not parquet file — then `SHUFFLE_4`/`BIT_TRANSPOSE` on raw 6-col int/float will show win (synthetic already 333K→291K).
+2. Yellow Taxi: ingest decompressed CSV (convert parquet via `pyarrow`) not parquet file - then `SHUFFLE_4`/`BIT_TRANSPOSE` on raw 6-col int/float will show win (synthetic already 333K→291K).
 3. Enable MDL gating for dict (only use if `size_with_dict + len(dict) < size_without`), and test on >1MB concatenated logs (10MB HDFS).
 4. Report multi-run variance + wall-clock/memory (currently single-run size only).
 

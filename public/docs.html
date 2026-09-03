@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Docs — rissa</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>:root{--bg:#fafafa;--fg:#0a0a0a;--mut:#666;--acc:#0f172a;--line:#e5e5e5}*{box-sizing:border-box}body{margin:0;font-family:ui-sans-system,system-ui;background:var(--bg);color:var(--fg);line-height:1.6}nav{display:flex;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0}nav a{font-weight:600;color:#0f172a;text-decoration:none}nav a.active{border-bottom:2px solid #0f172a}main{max-width:860px;margin:0 auto;padding:20px}pre{background:#0b1220;color:#e2e8f0;padding:12px;border-radius:8px;overflow:auto;font-size:13px}h1{font-size:28px}h2{font-size:20px;margin:24px 0 8px;border-bottom:1px solid var(--line);padding-bottom:6px}h3{font-size:15px;margin:14px 0 6px}.mut{color:var(--mut)}</style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head><body>
+<nav><a href="/">rissa</a><a href="/how-it-works.html">How</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html" class="active">Docs</a><a href="https://github.com/DEADTUNA4/rissa" style="margin-left:auto">GitHub</a></nav>
+<main id="content"><p class="mut">Loading DOCUMENTATION.md...</p></main>
+<script>
+fetch('DOCUMENTATION.md').then(r=>r.text()).then(t=>{
+  document.getElementById('content').innerHTML = marked.parse(t);
+}).catch(e=>{
+  document.getElementById('content').innerHTML = '<p>Failed to load docs. See <a href="/DOCUMENTATION.md">DOCUMENTATION.md</a></p>';
+});
+</script>
+</body></html>
