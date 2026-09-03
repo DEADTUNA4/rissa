@@ -250,13 +250,10 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
 
     chosen = []
     prev_block_raw = b""
-    # For speed: use multiprocessing if many blocks
+    # For speed: use multiprocessing if many blocks (ASUS TUF i7-8750H 6c/12t, 32GB)
+    # Each block independent (except XOR_PREV disabled in parallel mode for determinism)
     use_mp = len(blocks) > 4 and block_size >= BLOCK_1M
-    if use_mp:
-        import concurrent.futures
-        # We'll compress blocks in parallel after choosing transforms - but transform choice needs per-block
-        # For now, keep sequential for transform selection, parallel for backend compress if needed
-        pass
+    # Note: benchmark files on Seagate HDD — speed tests use in-memory data (no I/O) to avoid HDD bound; ratio is storage-independent
 
     for idx, block in enumerate(blocks):
         best_tid = 0

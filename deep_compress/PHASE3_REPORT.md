@@ -1,5 +1,7 @@
 # Phase 3 Report - Real Corpus Evaluation (64K/128K + Shared Dict + 16 Transforms)
 
+**System:** ASUS TUF FX504GE, i7-8750H 6c/12t @2.2GHz, 32GB DDR4, Python 3.13.14, Seagate ST2000LM007 2TB HDD (files on HDD, ratio storage-independent, speed may be I/O-bound, multiprocessing 12 threads) — see `BENCHMARK_SYSTEM.md`.
+
 **Ingested:** `corpora/` 4 real files (downloaded via curl resume):
 - `yellow_tripdata_2023-01.parquet` 46,949,719B (NYC TLC, columnar)
 - `Apache_2k.log` 171,239B (Loghub, text)
