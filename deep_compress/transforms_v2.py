@@ -69,8 +69,46 @@ def bwt_encode(data: bytes):
     n = len(data)
     if n==0:
         return b"", 0
-    if n>4096:
+    if n> 256*1024:  # limit to 256K for Python radix (1M would be ~40s, needs SA-IS)
         return None, None
+    # Radix 2-byte prefix: bucket by first 2 bytes, then sort within bucket (much faster than naive)
+    if n > 4096:
+        # Build suffix array via 2-byte radix
+        # Bucket indices by first 2 bytes
+        buckets = {}
+        mv = memoryview(data)
+        for i in range(n):
+            # key: 2-byte prefix with wrap for rotation (BWT needs rotations, not suffixes)
+            # For BWT rotations, we need rotation starting at i: data[i:]+data[:i]
+            # Use double data to avoid wrap allocation per compare
+            # Simple: use data[i:i+2] with wrap
+            if i+1 < n:
+                key = (mv[i] << 8) | mv[i+1]
+            else:
+                key = (mv[i] << 8) | mv[0] if n>1 else mv[i] << 8
+            buckets.setdefault(key, []).append(i)
+        # Sort each bucket by full rotation (still O(n log n) but with smaller buckets)
+        suffixes = []
+        double = data + data
+        for k in sorted(buckets.keys()):
+            bucket = buckets[k]
+            if len(bucket) == 1:
+                suffixes.append(bucket[0])
+            else:
+                # Sort by full rotation string
+                bucket.sort(key=lambda i: double[i:i+n])
+                suffixes.extend(bucket)
+        # Find primary where rotation == data (i==0)
+        try:
+            primary = suffixes.index(0)
+        except:
+            primary = 0
+        # Build BWT: char before each rotation
+        bwt = bytearray(n)
+        for idx, sa in enumerate(suffixes):
+            bwt[idx] = data[sa-1] if sa>0 else data[-1]
+        return bytes(bwt), primary
+    # Small n: naive
     rotations = [data[i:]+data[:i] for i in range(n)]
     sorted_rots = sorted(rotations)
     try:

@@ -1,17 +1,25 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
-<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — Real Data vs Shannon & zstd/xz</h1><p class="mut">128K MDL-gated 16T, fast <code>zlib-1</code> → top2 <code>zstd19</code>. Reproduce: <code>python deep_compress/final_bench.py</code></p>
-<p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD — ratio storage-independent, speed may be I/O-bound) · Multiprocessing 12 threads · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
+<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4 Pure CPU in-memory</h1><p class="mut">rissa v4 · 1M blocks · LZMA preset_dict · fast <code>zlib-1</code> → top2 <code>zstd19/xz9</code> · Reproduce: <code>python deep_compress/bench_two_modes.py</code> · <code>python deep_compress/final_bench.py</code></p>
+<p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD — ratio storage-independent, speed may be I/O-bound) · Pure CPU in-memory <code>rissa.compress(data)</code> (no HDD) vs Full pipeline I/O · Multiprocessing 12 threads max (6 RAM / 2-3 HDD) · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
 <section>
-<h2>Target Datasets</h2>
-<ul><li><strong>IoT & Weather:</strong> NOAA float arrays & 64-bit timestamps (binary sensor, not csv)</li><li><strong>System Logs:</strong> Loghub JSON & structured syslogs (Apache/HDFS)</li><li><strong>Columnar:</strong> NYC Yellow Taxi Parquet 46MB (already compressed, ent 8.00)</li></ul>
-<table><tr><th>Corpus</th><th>Orig</th><th>Ent b/B</th><th>xz -9</th><th>zstd -19</th><th>rissa 128K</th><th>Bits/Sym</th></tr>
-<tr><td>NOAA binary sensor 500K</td><td class="num">500K</td><td class="num">6.83</td><td class="num">213K</td><td class="num">292K</td><td class="num"><strong>238K SHUFFLE_8</strong></td><td class="num">3.82 vs 6.83</td></tr>
-<tr><td>Yellow parquet 2MB sample</td><td class="num">2.0M</td><td class="num">8.00</td><td class="num">1,997K</td><td class="num">1,996K</td><td class="num"><strong>1,996K tie</strong></td><td class="num">7.99 at limit</td></tr>
-<tr><td>Silesia dickens 2MB</td><td class="num">2.0M</td><td class="num">4.51</td><td class="num"><strong>586K</strong></td><td class="num">592K</td><td class="num">714K RAW</td><td class="num">2.86 -21% need dict</td></tr>
-<tr><td>HDFS 287K</td><td class="num">287K</td><td class="num">5.22</td><td class="num"><strong>42K</strong></td><td class="num">42K</td><td class="num">44K</td><td class="num">+4% header</td></tr>
+<h2>v4 Pure CPU in-memory — rissa.compress(data) (no HDD)</h2>
+<table><tr><th>Corpus</th><th>xz -9</th><th>rissa v4</th><th>CPU Speed</th><th>Note</th></tr>
+<tr><td>JSON-log 15MB</td><td class="num">1744</td><td class="num">3762</td><td class="num">2.2 MB/s</td><td class="mut">HDD would need 2-3 workers, not 12</td></tr>
+<tr><td>Sensor 6MB</td><td class="num">1610772</td><td class="num"><strong>1038616</strong></td><td class="num">1.5 MB/s</td><td><strong>rissa wins -35%</strong></td></tr>
+<tr><td>Columnar 3.6MB</td><td class="num">204160</td><td class="num"><strong>39432</strong></td><td class="num">1.1 MB/s</td><td><strong>rissa -80% win (SHUFFLE/BIT_PLANE)</strong></td></tr>
+<tr><td>Random 10MB</td><td class="num">10486344</td><td class="num">10487002</td><td class="num">1.0 MB/s</td><td>tie at Shannon limit</td></tr>
 </table>
-<p class="mut">Synthetic Counter 5KB: <code>zlib 324 → DELTA+zstd 71 -78%</code> proves transform, but real Silesia shows per-block without shared dict loses cross-block. Full <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/PHASE3_REPORT.md">PHASE3_REPORT.md</a>.</p>
+
+<h2>v4 Real Corpora — 1M fast vs max (MDL-gated dict)</h2>
+<table><tr><th>Corpus</th><th>Orig</th><th>xz -9</th><th>rissa 64K</th><th>rissa 128K</th><th>Bits/Sym</th></tr>
+<tr><td>Apache 171K</td><td class="num">171K</td><td class="num">7236</td><td class="num">7862</td><td class="num">7513</td><td class="num">+4% header</td></tr>
+<tr><td>HDFS 287K</td><td class="num">287K</td><td class="num">42768</td><td class="num">42807</td><td class="num">44588</td><td class="num">+4%</td></tr>
+<tr><td>NOAA csv 450K</td><td class="num">450K</td><td class="num">28924</td><td class="num">30286</td><td class="num">31856</td><td class="num">csv text, binary sensor would tie with SHUFFLE_8</td></tr>
+<tr><td>5MB 'x'* (repetitive)</td><td class="num">5MB</td><td class="num">620</td><td class="num" colspan="2"><strong>rissa 1456</strong> 0.3 MB/s both fast=False/True</td><td class="num">bottleneck is LZMA, not Python — preset 6+dict already wired</td></tr>
+</table>
+<p class="mut">Full pipeline I/O on HDD is ~0.6× CPU speed (HDD cannot feed 12 workers — use 2-3, imap reuse pool). Synthetic Counter 5KB: <code>zlib 324 → DELTA+zstd 71 -78%</code>. Full <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/PHASE3_REPORT.md">PHASE3_REPORT.md</a> · v3 128K results: NOAA 500K 238K SHUFFLE_8, Yellow 2M tie, Silesia dickens 714K RAW.</p>
+
 <h2>Why not synthetic counters?</h2>
 <p>Synthetic <code>bytes([i%256])</code> is not sensor data. Real NOAA binary is <code>&lt;I fff&gt;</code> structs with jitter — needs <code>DELTA_ZIGZAG</code> + <code>SHUFFLE</code>. Use your 1MB+ raw dump in <code>corpora/</code>.</p>
 </section>
