@@ -2,6 +2,12 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## v4.6 — 2026-09-03 — Pure C SHUFFLE/BIT/DELTA 141-308x via w64devkit
+
+**Added:** `rissa/c_shuffle.c` `rissa/c_bit.c` `rissa/c_delta.c` pure `C` `O3 -mavx2` `E:\w64devkit\bin\gcc` `mingw32` — `SHUFFLE 141×` `20×1M` `2.020s→0.014s`, `BIT 308×` `19.585s→0.063s`, `DELTA 111×` `3.22s→0.029s`, `w64devkit` `GCC 16.2.0` `MSVCRT` `pthreads`, `no pyx`, `rissa/c_shuffle.cp313-win_amd64.pyd` `bit-identical` fallback `shuffle_cpu` if `ImportError`.
+
+**Changed:** `deep_compress/transforms_v2.py` `HAS_C_*` try `import rissa.c_*` → `C` if `stride==4`/`len>=8` else `Python` fallback — hybrid `C` hot paths + `Python` `MDL` `1+len(extra)` orchestration.
+
 ## v4.5.1 — 2026-09-03 — Critical audit fixes
 
 **Fixed — 5 Critical (Top Priority):**

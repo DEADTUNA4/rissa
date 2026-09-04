@@ -2,7 +2,7 @@
 rissa — https://rissa.web.app
 import rissa; rissa.compress(data, level=3)
 """
-__version__ = "4.5.1"
+__version__ = "4.6.0"
 __author__ = "rissa (Rissanen MDL 1978) v4.3"
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
