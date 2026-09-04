@@ -269,9 +269,8 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         out.extend(struct.pack(">I", 0))
         out.extend(struct.pack(">I", 0))
 
-    # Adaptive priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed via 4x256K, 1M+ still stubbed (needs SA-IS 200-300 lines)
-    # So 256K-1M closed, 1M+ stubbed - not 5 closed. 1M is now default block size, so stub is live.
-    priority_order = [0, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15]
+    # Adaptive priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text
+    priority_order = [0, 18, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
     # Early termination threshold: if RAW+LZMA achieves >90% of entropy, skip others
     # Compute entropy sample
     from collections import Counter
@@ -369,12 +368,12 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
                 best_extra = extra
                 best_payload = comp
                 best_name = name
-                # Hard early-stop for highly repetitive: <1% of raw (e.g., 5MB 'x' -> 0.3 MB/s -> tens MB/s if skipped)
+                # Hard early-stop for highly repetitive: <1% of raw
                 if total < len(block) * 0.01:
                     break
-                # Early termination: if we achieve near entropy (90% lower bound), stop — more aggressive in fast mode
-                if ent_bytes > 0 and total <= ent_bytes * entropy_threshold:
-                    break
+                # Early termination disabled for now — was too aggressive (broke before RACD on nci where RAW 1.7M << ent 10M)
+                # if ent_bytes > 0 and total <= ent_bytes * entropy_threshold:
+                #     break
             # Context-mixing: after BWT_MTF, try order-1 Huffman (can beat LZMA on BWT output, self-contained)
             if tid in [5,12] and backend == "lzma":  # BWT_MTF
                 try:
