@@ -440,11 +440,11 @@ def _bwt_mtf_encode(data: bytes):
     if bwt is None:
         return None, None
     mtf = mtf_encode(bwt)
-    extra = struct.pack(">H", primary)
+    extra = struct.pack(">I", primary)
     return mtf, extra
 
 def _bwt_mtf_decode(data: bytes, extra: bytes):
-    primary = struct.unpack(">H", extra)[0] if extra else 0
+    primary = struct.unpack(">I", extra[:4])[0] if extra and len(extra)>=4 else (struct.unpack(">H", extra[:2])[0] if extra and len(extra)>=2 else 0)
     bwt = mtf_decode(data)
     return bwt_decode_fast(bwt, primary)
 
@@ -454,11 +454,11 @@ def _bwt_mtf_rle_encode(data: bytes):
         return None, None
     mtf = mtf_encode(bwt)
     rle = rle_zero_encode(mtf)
-    extra = struct.pack(">H", primary)
+    extra = struct.pack(">I", primary)
     return rle, extra
 
 def _bwt_mtf_rle_decode(data: bytes, extra: bytes):
-    primary = struct.unpack(">H", extra)[0] if extra else 0
+    primary = struct.unpack(">I", extra[:4])[0] if extra and len(extra)>=4 else (struct.unpack(">H", extra[:2])[0] if extra and len(extra)>=2 else 0)
     mtf = rle_zero_decode(data)
     bwt = mtf_decode(mtf)
     return bwt_decode_fast(bwt, primary)
@@ -469,10 +469,10 @@ def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
         return _bwt_mtf_encode(data)
     out = bytearray()
     extra = bytearray()
-    extra.extend(struct.pack(">H", sub_size))
+    extra.extend(struct.pack(">I", sub_size))
     # store num sub-blocks
     num = (len(data) + sub_size -1)//sub_size
-    extra.extend(struct.pack(">H", num))
+    extra.extend(struct.pack(">I", num))
     for i in range(0, len(data), sub_size):
         chunk = data[i:i+sub_size]
         bwt, primary = bwt_encode(chunk)
@@ -483,24 +483,29 @@ def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
         else:
             mtf = mtf_encode(bwt)
             out.extend(mtf)
-            extra.extend(struct.pack(">H", primary))
+            extra.extend(struct.pack(">I", primary))
     return bytes(out), bytes(extra)
 
 def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
-    if len(extra) < 4:
+    # Handle both old H (4+2*num) and new I (8+4*num) for compat
+    if len(extra) >= 8 and struct.unpack(">I", extra[4:8])[0] < 1000: # new I format has num at 4:8
+        pass
+    elif len(extra) < 4:
         return _bwt_mtf_decode(data, extra)
-    sub_size = struct.unpack(">H", extra[0:2])[0]
-    num = struct.unpack(">H", extra[2:4])[0]
+    if len(extra) < 8:
+        return _bwt_mtf_decode(data, extra)
+    sub_size = struct.unpack(">I", extra[0:4])[0]
+    num = struct.unpack(">I", extra[4:8])[0]
     if sub_size == 0 or num == 0:
         return _bwt_mtf_decode(data, extra)
     out = bytearray()
     pos = 0
-    epos = 4
+    epos = 8
     for _ in range(num):
         if epos+2 > len(extra):
             break
-        primary = struct.unpack(">H", extra[epos:epos+2])[0]
-        epos+=2
+        primary = struct.unpack(">I", extra[epos:epos+4])[0]
+        epos+=4
         if primary == 0xFFFF:
             # raw chunk
             chunk_len = min(sub_size, len(data)-pos)
