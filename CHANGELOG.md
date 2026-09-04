@@ -15,11 +15,11 @@
 - Dict gate: 256K sample + compressed overhead `gain > overhead*0.5`, `>1M` always-on only if gain, `force_dict` prints `[rissa] forced`
 - Hard early-stop `<1%` raw skips 16T `LZMA` tests — 5MB `x*` 0.3→3.0 MB/s 10×
 - BWT radix 2-byte bucket up to 256K (was 4K naive 50K 2.3s), `BWT_SUBBLOCK` 1M→4×256K, `priority_order` now `16` for `>256K`
-- `rissa` `__version__ 4.1.0`, `pyproject 4.1.0`, `MAGIC RISA v4.1` docs updated from `v3` (range coder gated `--experimental`, Silesia pending)
+- `rissa` `__version__ 4.4.0`, `pyproject 4.4.0`, `MAGIC RISA v4.4` docs updated from `v3` (range coder gated `--experimental`, Silesia pending)
 
 **Changed:**
 - `README.md` trimmed to What/Why/Install/Basic/Benchmarks (was 7 sections with Architecture), `GUIDE.md`/`FORMAT.md`/`DEVELOPER.md` split out as requested
-- `public/index.html` hero to `v4.1` `RISA v4` `1M/4M` + `CHANGELOG` link, nav consistent `rissa | How | Benchmarks | Spec | Docs | GitHub` (was `index` inline `max-width`)
+- `public/index.html` hero to `v4.4` `RISA v4` `1M/4M` + `CHANGELOG` link, nav consistent `rissa | How | Benchmarks | Spec | Docs | GitHub` (was `index` inline `max-width`)
 - `firebase.json` `rewrites ** → /index.html` removed → `cleanUrls` so `/tool.html` now 404 (was SPA serving index)
 
 **Removed:**

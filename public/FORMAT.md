@@ -17,7 +17,7 @@ All integers big-endian `>I` / `>H`.
 | Field | Size | Value |
 |-------|------|-------|
 | `MAGIC` | 4 | `0x52 49 53 41` `"RISA"` (was `DCM2`/`DCMP` legacy auto-migrated) |
-| `VER` | 1 | `3` (64K/128K) or `4` (1M/4M adaptive, `RISA v4.1`) |
+| `VER` | 1 | `3` (64K/128K) or `4` (1M/4M adaptive, `RISA v4.4`) |
 | `BACKEND` | 1 | `0=huffman` `1=zlib` `2=lzma` `3=zstd` |
 | `NUM_BLOCKS` | 4 | `>I` number of blocks |
 | `BLOCK_SIZE` | 4 | `>I` 4096, 16384, 65536, 131072, 1048576, 4194304 or `len(data)` for single |
@@ -25,7 +25,7 @@ All integers big-endian `>I` / `>H`.
 | `DICT_ORIG_LEN` | 4 | `>I` original dict length |
 | `DICT_COMP` | var | `lzma.compress(dict, preset=9)` if `DICT_LEN>0` |
 
-Example header for `v4.1` 1M without dict: `52 49 53 41 04 03 03 00 00 00 01 00 10 00 00 00 00 00 00 00 00 00 00`
+Example header for `v4.4` 1M without dict: `52 49 53 41 04 03 03 00 00 00 01 00 10 00 00 00 00 00 00 00 00 00 00`
 
 ## Blocks
 

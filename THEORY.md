@@ -118,4 +118,4 @@ No compressor beats all on all inputs. `rissa` wins on bit-plane separable `x-ra
 
 ---
 
-**All theories together = rissa.** Each named after the person whose idea made that layer possible. Full stack `deep_compress/THEORY.md`, code `deep_compress/`, benchmarks `public/benchmarks.html` version-sorted `v4.3` latest first.
+**All theories together = rissa.** Each named after the person whose idea made that layer possible. Full stack `deep_compress/THEORY.md`, code `deep_compress/`, benchmarks `public/benchmarks.html` version-sorted `v4.4` latest first.

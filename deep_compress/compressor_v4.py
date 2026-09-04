@@ -1,6 +1,6 @@
 """
-rissa v4.1: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
-Format v4.1: global dict MDL-gated, variable blocks, chains, fast mode
+rissa v4.4: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
+Format v4.4: global dict MDL-gated, variable blocks, chains, fast mode
 
 Implements user spec:
 1. LZMA with trained preset_dict (frequent 8-byte substrings)

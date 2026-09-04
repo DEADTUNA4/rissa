@@ -2,7 +2,7 @@
 
 **https://rissa.web.app — https://github.com/DEADTUNA4/rissa — Apache 2.0**
 
-This is the exhaustive list of problems found during v1-v4.3, with status and fix. Updated as we go.
+This is the exhaustive list of problems found during v1-v4.4, with status and fix. Updated as we go.
 
 ## High — Correctness / Trust (must fix before default)
 
@@ -49,6 +49,6 @@ This is the exhaustive list of problems found during v1-v4.3, with status and fi
 
 **Current honest status (single source of truth `deep_compress/KNOWN_RESULTS.md:1`):** **1 real win** `x-ray` `BIT_PLANE` `-3.9%` (16-bit medical) + **2 synthetic wins** `columnar -80%` `sensor -35%` **(synthetic)** — synthetic labeled, not real. **11 ties** on Silesia general structured/scientific, all `RAW` full 18/18 dump (including `FLOAT_SPLIT` offsets 0-7 all lose `+1700` — correctly loses because `nci` is text `SDF` `"2.0000"` not binary `IEEE754`, so `FLOAT_SPLIT` scrambles, not misaligned). **Truer claim:** wins on bit-plane separable, ties on general structured — invest in `RACD` per-column `0-7` sweep (all 16 cols win `78-96%` reduction, `4.0%` remaining = `96%` win, `21.6%` remaining = `78%` win — `4.0%` is huge win, not fail).
 
-**Benchmark sorting:** `public/benchmarks.html:1` version history latest first `v4.3` `v4.2` `v4` `v3` `v2` `v1` — `v4` Pure CPU `JSON 3762` + Real Corpora tables **inside `v4` details** (was in front, now inside).
+**Benchmark sorting:** `public/benchmarks.html:1` version history latest first `v4.4` `v4.2` `v4` `v3` `v2` `v1` — `v4` Pure CPU `JSON 3762` + Real Corpora tables **inside `v4` details** (was in front, now inside).
 
 All problems above are tracked here — this file is the `problem.md` you asked for.

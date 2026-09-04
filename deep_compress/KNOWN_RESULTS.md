@@ -1,10 +1,10 @@
 # Known Results — rissa Single Source of Truth
 
-**Updated: 2026-09-03 — v4.1 — Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
+**Updated: 2026-09-03 — v4.4 — Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
 
 This is the standing table — win/tie/loss per file type, updated as we go. Do not re-derive from chat history.
 
-| File | Type | Size | xz -9 | rissa v4.1 single | Result | Transform | Notes |
+| File | Type | Size | xz -9 | rissa v4.4 single | Result | Transform | Notes |
 |------|------|------|-------|-------------------|--------|-----------|-------|
 | `dickens` | text | 9.9M | 2764K | 2764K | **tie** `+32B` | `RAW` | per-block loses cross-block without dict |
 | `mozilla` | exe | 50M | 13061K | 13061K | tie | `RAW` | |

@@ -1,6 +1,6 @@
 # Guide — How to use rissa
 
-**https://rissa.web.app — v4.1 — `pip install rissa-compress`**
+**https://rissa.web.app — v4.4 — `pip install rissa-compress`**
 
 ## How to use
 
