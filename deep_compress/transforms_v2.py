@@ -4,7 +4,7 @@ Adds: delta-of-delta, standalone MTF, byte-shuffle/transpose for structured reco
 """
 import struct
 
-# Try pure C hot paths (141x SHUFFLE, 308x BIT) via w64devkit GCC 16.2, fallback to Python
+# Try pure C hot paths (141x SHUFFLE, 308x BIT, 111x DELTA) via w64devkit GCC 16.2, fallback to Python
 try:
     import rissa.c_shuffle
     HAS_C_SHUFFLE=True
@@ -13,8 +13,15 @@ try:
     import rissa.c_bit
     HAS_C_BIT=True
 except: HAS_C_BIT=False
+try:
+    import rissa.c_delta
+    HAS_C_DELTA=True
+except: HAS_C_DELTA=False
 
 def delta_encode(data: bytes) -> bytes:
+    if HAS_C_DELTA:
+        try: return rissa.c_delta.delta(data)
+        except: pass
     if not data:
         return b""
     out = bytearray(len(data))
@@ -24,6 +31,9 @@ def delta_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def delta_decode(data: bytes) -> bytes:
+    if HAS_C_DELTA:
+        try: return rissa.c_delta.delta_decode(data)
+        except: pass
     if not data:
         return b""
     out = bytearray(len(data))
@@ -247,6 +257,9 @@ def _test_shuffle():
 
 def zigzag_encode(data: bytes) -> bytes:
     """Delta + zigzag: maps signed -128..127 to 0..255 small magnitude = small value. cf. Gorilla/Prometheus"""
+    if HAS_C_DELTA:
+        try: return rissa.c_delta.zigzag(data)
+        except: pass
     if not data:
         return b""
     out = bytearray(len(data))
@@ -259,6 +272,9 @@ def zigzag_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def zigzag_decode(data: bytes) -> bytes:
+    if HAS_C_DELTA:
+        try: return rissa.c_delta.zigzag_decode(data)
+        except: pass
     if not data:
         return b""
     out = bytearray(len(data))
@@ -266,7 +282,6 @@ def zigzag_decode(data: bytes) -> bytes:
     for i in range(1,len(data)):
         zz = data[i]
         signed = (zz >> 1) ^ (-(zz & 1))
-        # signed is now -128..127 (python int), convert to delta unsigned
         delta = signed & 0xFF
         out[i] = (out[i-1] + delta) & 0xFF
     return bytes(out)
