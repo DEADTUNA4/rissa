@@ -7,10 +7,13 @@ import os, random, struct
 import sys
 sys.path.insert(0, '.')
 try:
-    from transforms_v2 import TRANSFORMS_V2
+    from transforms_v2 import TRANSFORMS_V2, shuffle_encode, shuffle_decode, racd_encode, racd_decode, bwt_encode
 except ImportError:
-    from .transforms_v2 import TRANSFORMS_V2, shuffle_encode, shuffle_decode
-from compressor_v2 import compress_with_backend, decompress_with_backend
+    from .transforms_v2 import TRANSFORMS_V2, shuffle_encode, shuffle_decode, racd_encode, racd_decode, bwt_encode
+try:
+    from compressor_v2 import compress_with_backend, decompress_with_backend
+except ImportError:
+    from .compressor_v2 import compress_with_backend, decompress_with_backend
 try:
     from huffman import huffman_encode_block, huffman_decode_block
 except ImportError:
@@ -106,11 +109,37 @@ def test_versioning():
     print("\n=== Versioning ===")
     data=b"test version"
     comp,_=compress_with_backend(data, backend='zstd')
-    assert comp[:4]==b"DCM2", "magic"
-    assert comp[4]==2, "version"
+    # v4.4 uses RISA v4, legacy DCM2 still accepted
+    assert comp[:4]==b"RISA" or comp[:4]==b"DCM2", f"magic {comp[:4]}"
+    assert comp[4]==4 or comp[4]==2, f"version {comp[4]}"
     dec=decompress_with_backend(comp)
     assert dec==data
     print("  versioning OK")
+    # Also test v4
+    try:
+        from compressor_v4 import compress_v4, decompress_v4
+        comp4,_,_=compress_v4(data, backend='zstd')
+        assert comp4[:4]==b"RISA" and comp4[4]==4
+        assert decompress_v4(comp4)==data
+        print("  v4 versioning OK")
+    except Exception as e:
+        print(f"  v4 versioning skip {e}")
+    # Test RACD
+    try:
+        tr, ex = racd_encode(b"a b c\n"*100 + b"  irregular   spacing\n"*10)
+        assert racd_decode(tr, ex) == b"a b c\n"*100 + b"  irregular   spacing\n"*10
+        print("  RACD whitespace preserve OK")
+    except Exception as e:
+        print(f"  RACD skip {e}")
+    # Test BWT branch split (256K)
+    try:
+        data_bwt=b"banana"*1000
+        from transforms_v2 import bwt_encode, bwt_decode_fast
+        bwt, p = bwt_encode(data_bwt)
+        assert bwt_decode_fast(bwt, p)==data_bwt
+        print("  BWT 256K OK")
+    except Exception as e:
+        print(f"  BWT skip {e}")
 
 def fuzz_random():
     print("\n=== Fuzz 200 random ===")

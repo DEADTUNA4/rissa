@@ -11,7 +11,7 @@
 
 ## 4-Layer Stack - Accomplished
 
-### Layer 1: Transform Search `transforms_v2.py:1` - 16 transforms, per-block MDL
+### Layer 1: Transform Search `transforms_v2.py:1` - 19 transforms, per-block MDL
 Per-block `compressor_v3.py:7` 64K/128K (was 16K `compressor_v2.py:7`) - `total = len(backend(T(block)))+1+len(extra)` `compressor_v2.py:35`/`compressor_v3.py:35`.
 
 **Accomplished `TRANSFORMS_V2:78` (16):**
@@ -22,7 +22,7 @@ Per-block `compressor_v3.py:7` 64K/128K (was 16K `compressor_v2.py:7`) - `total 
 - `SHUFFLE_2/4/8:58`, `FLOAT_SPLIT:58` IEEE754 4-stream
 - **New Phase2:** `BIT_TRANSPOSE:14` 8x8 bit matrix for 32/64-bit columns, `SHUFFLE4_DELTA:15` composition `SHUFFLE→DELTA` (first stacked `T1->T2` example)
 
-Verified per-block not per-file `test_roundtrip.py:1` 16 transforms OK, shuffle adversarial, 200 fuzz.
+Verified per-block not per-file `test_roundtrip.py:1` 19 transforms OK, shuffle adversarial, 200 fuzz.
 
 **Planned:** XOR-with-prev-block (needs inter-block state, flagged `ARCHITECTURE.md:12`).
 
@@ -58,7 +58,7 @@ Rissanen MDL, Kolmogorov, Wolpert, Mahoney PAQ, Duda ANS, Deorowicz Silesia, Gor
 ## Structure
 ```
 deep_compress/
-  transforms_v2.py  16 transforms (incl BIT_TRANSPOSE, SHUFFLE4_DELTA)
+  transforms_v2.py  19 transforms (incl BIT_TRANSPOSE, SHUFFLE4_DELTA)
   rans.py           Layer3 stub + Shannon report
   compressor_v2.py  16K per-block MDL
   compressor_v3.py  64K/128K + streaming + shared dict (MAGIC DCM3 v3)

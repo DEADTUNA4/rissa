@@ -12,7 +12,7 @@
 Compressed = min_T [ Cost(T) + Cost(Model) + Cost(Data | Model) ]
 ```
 
-The whole engine. Treat compression as *finding the shortest description*, not just squeezing bytes. Search 16 reversible `T` per block, keep the `T` with smallest total `Cost(T)+Cost(Model)+Cost(Data|Model)`. Uncomputable Kolmogorov made tractable by fixing the model set. No Free Lunch [Wolpert] — no transform wins on all inputs. See `deep_compress/THEORY.md:1` and `public/how-it-works.html`.
+The whole engine. Treat compression as *finding the shortest description*, not just squeezing bytes. Search 19 reversible `T` per block, keep the `T` with smallest total `Cost(T)+Cost(Model)+Cost(Data|Model)`. Uncomputable Kolmogorov made tractable by fixing the model set. No Free Lunch [Wolpert] — no transform wins on all inputs. See `deep_compress/THEORY.md:1` and `public/how-it-works.html`.
 
 *Why Rissanen:* Without MDL, rissa is just 16 heuristics. With MDL, it is one equation.
 

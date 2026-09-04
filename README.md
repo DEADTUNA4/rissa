@@ -10,7 +10,7 @@
 
 ## What Rissa is
 
-`rissa` is a per-block adaptive compressor. For each 64K-1M block it tries 16 reversible transforms (`DELTA`, `SHUFFLE`, `FLOAT_SPLIT`, `BWT`, `BIT_TRANSPOSE`) and keeps the one with lowest description length:
+`rissa` is a per-block adaptive compressor. For each 64K-1M block it tries 19 reversible transforms (`DELTA`, `SHUFFLE`, `FLOAT_SPLIT`, `BWT`, `BIT_TRANSPOSE`) and keeps the one with lowest description length:
 
 ```
 Compressed = min_T [ Cost(T) + Cost(Model) + Cost(Data | Model) ]
