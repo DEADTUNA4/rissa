@@ -9,7 +9,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 | `dickens` | text | 9.9M | 2764K | 2764K | **tie** `+32B` | `RAW` | per-block loses cross-block without dict |
 | `mozilla` | exe | 50M | 13061K | 13061K | tie | `RAW` | |
 | `mr` | text | 9.7M | 2686K | 2686K | tie | `RAW` | |
-| `nci` | chemical DB `SDF` `V2000` | 32M | 1698K | 1698K | tie | `RAW` | `64K` `RAW` 3965 wins all 18/18, file-scale `RACD` `23,383,582` transposed is `22.3M` intermediate not `33M` file, direct `lzma` `20.6%` not `compress_v4` MDL, no roundtrip reported — gated, not promoted |
+| `nci` | chemical DB `SDF` `V2000` | 32M | 1698K | 1698K | tie | `RAW` | **RACD: tested and ruled out on real text data. Its apparent win (`45,677→3,556` `10.3%` on 64K, `730K→58K` `14.7%` on 1M) was caused by whitespace-normalization bug `re.split(br'\s+')` + `b' '.join` silently changing `b'  field1   field2'` → `b'field1 field2'`; once fixed to `re.split(b'(\\s+)')` preserving `32` cols `95,160` vs `65,536` `+45%` raw `7421` vs `3965` lose. Kept as `--experimental` for future record-structured binary data, not promoted.** |
 | `ooffice` | binary | 6M | 2370K | 2370K | tie | `RAW` | |
 | `osdb` | db | 9.8M | 2783K | 2783K | tie | `RAW` | |
 | `reymont` | text | 6.4M | 1286K | 1286K | tie | `RAW` | |
@@ -34,7 +34,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 
 **Reframed target (was "structured/sensor/log columnar"):**
 
-> **Actual evidence:** **1 real win** `x-ray` `BIT_PLANE -3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` is **tie** `RAW` full 18/18 (`FLOAT_SPLIT` `+1700` correctly loses on text `SDF`, `RACD` 64K `10.3%` and 1M `14.7%` wins are `lzma` on transposed sample, not `compress_v4` MDL, no roundtrip, file `33,553,445` vs transposed `23,383,582` mismatch, `20.6%` vs `18.7%` math mismatch). **Truer claim:** `rissa` wins on **bit-plane separable** (`x-ray`) and ties on general structured — `RACD` remains **gated** `--experimental` until `compress_v4` 33M pipeline `TID 18` vs 17 others `>I` prefix `1+len(extra)` + roundtrip `decompress_v4(comp)==data` on `33M` shows win.
+> **Actual evidence:** **1 real win** `x-ray` `BIT_PLANE -3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` is **tie** `RAW` full 18/18. **RACD: tested and ruled out on real text data. Its apparent win throughout development was caused by whitespace-normalization correctness bug; once fixed to `re.split(b'(\\s+)')` preserving `32` cols, `RACD` `95,160` vs `65,536` raw `+45%` and `7421` vs `3965` lose. Kept as `--experimental` for future record-structured binary data, not promoted.** **Truer claim:** `rissa` wins on **bit-plane separable** (`x-ray`) and ties on general structured — next lever is `SHUFFLE` stride detection on real columnar.
 
 **Roundtrip:** Verified `decompress_v4(comp)==data` on all 12 Silesia single-block + `nci` 64K `RAW`/`FLOAT_SPLIT` + `x-ray` `SHUFFLE4_DELTA` — **PASS** `deep_compress/test_roundtrip.py`.
 

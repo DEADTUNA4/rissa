@@ -51,4 +51,14 @@ This is the exhaustive list of problems found during v1-v4.4, with status and fi
 
 **Benchmark sorting:** `public/benchmarks.html:1` version history latest first `v4.4` `v4.2` `v4` `v3` `v2` `v1` — `v4` Pure CPU `JSON 3762` + Real Corpora tables **inside `v4` details** (was in front, now inside).
 
+## False Leads Appendix — Most Important: RACD
+
+**RACD apparent win throughout development was caused by whitespace-normalization correctness bug; once fixed, loses to RAW on nci. Kept as `--experimental` for future record-structured binary data, not promoted.**
+
+- **Mechanism:** `re.split(br'\s+', line.strip())` + `b' '.join` silently changed `b'  field1   field2'` (2+3 spaces) → `b'field1 field2'` (1 space) — `32` cols `95,160` vs `65,536` raw `+45%` but `lzma` `3,556` vs `3,964` win `+408` *because* whitespace collapsed, not because column transpose helped. Correct `re.split(b'(\\s+)')` preserving `32` cols with delimiters gives `95,160` `+45%` raw and `7,421` vs `3,965` lose.
+- **How surfaced:** Deliberate correctness check prompted by general principle `does field-split preserve exact delimiter bytes, or does it normalize/collapse whitespace?` — not by test failing. Tested with `b'  field1   field2  \n'` irregular spacing, expected `FAIL` but got `PASS` via `b""` early return `len(data) <1024`, then larger `6,700` lines `300` with `1,714` lines `16` cols showed `RACD` `7421` vs `3965` lose once fixed.
+- **Went to official on live public site before being caught:** `THEORY.md:1` `RACD Theory — OFFICIAL` `file-scale 33M 23,383,582 → 1,380,592 win 20.6%` pushed `30147f9` to `https://github.com/DEADTUNA4/rissa` and `https://rissa.web.app` as `official` — `23,383,582` was `22.3M` transposed intermediate not `33M` file `33,553,445`, direct `lzma` not `compress_v4` MDL `1+len(extra)` `>I` `TID 18` vs 17, no `decompress_v4(comp)==data` roundtrip, `18.7%` vs `20.6%` math mismatch. Reverted `cb6e977` to gated `3 closed, 1 capped, 1 pending`.
+
+**Lesson:** `RACD` `16/16` columns `78-96%` reduction (`4.0%` remaining = `96%` win) rechecked with `reduction = 1-comp/raw` consistently — `4.0%` is huge win, not `4.0%` fail — but whole `1M` `14.7%` and `33M` `20.6%` were `direct lzma` wins, not `compress_v4` `MDL` wins. Keep `RACD` gated until `33M` `compress_v4` `TID 18` `0-7` sweep `>I` `1+len(extra)` + roundtrip on `33M` shows win.
+
 All problems above are tracked here — this file is the `problem.md` you asked for.
