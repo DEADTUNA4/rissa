@@ -30,3 +30,7 @@ build/
 .DS_Store
 Thumbs.db
 .firebase/
+
+rissa/*.pyd
+rissa/*.so
+rissa/*.dll
