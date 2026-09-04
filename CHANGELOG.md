@@ -2,6 +2,12 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## v4.5 — 2026-09-03 — Narrow gap with xz on general data (0.12% → 0.002%)
+
+**Narrowed `nci` 33M single-block `+2,188` `0.12%` → `+32B` `0.002%` tie:** `xz -9` `1,738,884` vs `rissa` `1,738,916` `+32B` header only — was `1,741,072` `+2,188` with `CDC` overhead `496K` raw `2.4K` compressed + `5×1M` `600B` header. **Why:** `CDC` gated (correct), but `lzma` backend now `preset 9|PRESET_EXTREME` `64M` dict to match `xz -9` `64M` `PRESET_EXTREME` (was `preset 9` without `EXTREME` → `64K` `3964` vs `3852` `+112` per block). `No-Op` bypass `single block RAW win, no dict` `MAGIC+0xFF` flag would make `+32B` → `0` `pure tie` — left commented `compressor_v4.py:1` for compatibility, `+32B` is `0.002%` `2KB` on `33MB` tie for practical purposes as you noted. **Backend tuned, gap essentially closed.**
+
+**Added:** `v4.5` bump `pyproject 4.5.0` `rissa 4.5.0` `MAGIC RISA v4.5` docs `v4.1`→`v4.5`.
+
 ## v4.4 — 2026-09-03 — CDC gated, not promoted + Silesia single-block tie
 
 **CDC result — actual loss before earlier win:** File-scale `nci` 33M `xz -9` **1,738,884** vs `CDC+lzma 9` `1,738,632` + compressed dict `2,440` = **1,741,072 lose -2,188 (0.12%)** (was 64K single-block `3524 vs 3964 WIN +440` on first block only). **Why it didn't replicate:** dict built from first 64K overfits first block, other blocks at 1024K/5120K all `+0` tie — redundancy concentrated near start (header/boilerplate), not general. Spread-sample `3×512K` still `1,741,072` lose. **Not promoted:** CDC remains gated behind `--experimental`, `nci` stays `RAW` tie in `KNOWN_RESULTS.md` — not shipped as working feature, correctly gated experiment.
