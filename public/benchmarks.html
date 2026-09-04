@@ -1,14 +1,32 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
-<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4.6 Pure C Hybrid</h1><p class="mut">rissa v4.6 · pure C SHUFFLE/BIT/DELTA 111-308x via w64devkit · Reproduce: <code>python -c "import rissa.c_shuffle"</code></p>
+<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4.6.1 Timed end-to-end</h1><p class="mut">rissa v4.6.1 · 10 corpora + C microbench, comp/decomp wall time, MB/s both directions · Reproduce: <code>python deep_compress/bench_461.py --only &lt;name&gt;</code></p>
 <p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD — ratio storage-independent, speed may be I/O-bound) · Pure CPU in-memory <code>rissa.compress(data)</code> (no HDD) vs Full pipeline I/O · Multiprocessing 12 threads max (6 RAM / 2-3 HDD) · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
 <section>
 <h2>Version History — Scroll down to see older (latest first)</h2>
-<p class="mut">Newest at top — v4.6 is latest. See how far rissa has come.</p>
+<p class="mut">Newest at top — v4.6.1 is latest. See how far rissa has come.</p>
 
 <details open style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
-<summary><strong>v4.6 — 2026-09-03 — Pure C SHUFFLE 141x BIT 308x DELTA 111x via w64devkit</strong> <span class="badge">current</span></summary>
+<summary><strong>v4.6.1 — 2026-09-04 — Timed end-to-end benchmark + RLE + rissa[arrow]</strong> <span class="badge">current</span></summary>
+<p class="mut">Single 1M blocks, lzma backend, 1 run + roundtrip assert each; micro 5 reps. i7-8750H, Python 3.13.14. Micro (C, bit-identical): SHUFFLE 1358.3 MB/s, BIT 344.2, DELTA 1188.1.</p>
+<table><tr><th>Corpus</th><th>Orig</th><th>xz -9 (s)</th><th>zstd-19 (s)</th><th>rissa</th><th>comp s / MB/s</th><th>decomp s / MB/s</th><th>vs xz</th></tr>
+<tr><td>counter-1M</td><td class="num">1048576</td><td class="num">512 (0.038)</td><td class="num">358 (0.005)</td><td class="num">544 RAW</td><td class="num">0.30 / 3.49</td><td class="num">0.003 / 313.6</td><td class="num">+6.25%</td></tr>
+<tr><td>json-log-1M</td><td class="num">1048576</td><td class="num">364 (0.035)</td><td class="num">179 (0.005)</td><td class="num">396 RAW</td><td class="num">0.27 / 3.89</td><td class="num">0.003 / 350.5</td><td class="num">+8.79%</td></tr>
+<tr><td>sensor-480K</td><td class="num">480000</td><td class="num">193608 (0.101)</td><td class="num">272962 (0.062)</td><td class="num"><strong>100881 SHUFFLE_8</strong></td><td class="num">21.87 / 0.02</td><td class="num">0.078 / 6.2</td><td class="num"><strong>-47.89%</strong></td></tr>
+<tr><td>columnar-1M</td><td class="num">1048576</td><td class="num">65260 (0.341)</td><td class="num">142502 (0.267)</td><td class="num"><strong>1725 SHUFFLE4_DELTA</strong></td><td class="num">71.17 / 0.01</td><td class="num">0.17 / 6.2</td><td class="num"><strong>-97.36%</strong></td></tr>
+<tr><td>Silesia dickens-1M</td><td class="num">1048576</td><td class="num">310152 (0.417)</td><td class="num">313515 (0.364)</td><td class="num">310272 RAW</td><td class="num">120.27 / 0.01</td><td class="num">0.019 / 55.4</td><td class="num">+0.04%</td></tr>
+<tr><td>Silesia nci-1M</td><td class="num">1048576</td><td class="num">68852 (0.336)</td><td class="num">70518 (0.602)</td><td class="num"><strong>64612 RAW</strong></td><td class="num">140.74 / 0.01</td><td class="num">0.008 / 123.5</td><td class="num"><strong>-6.16%</strong></td></tr>
+<tr><td>Silesia xml-1M</td><td class="num">1048576</td><td class="num">124300 (0.224)</td><td class="num">125030 (0.404)</td><td class="num"><strong>117404 BWT_SUBBLOCK</strong></td><td class="num">105.39 / 0.01</td><td class="num">0.672 / 1.6</td><td class="num"><strong>-5.55%</strong></td></tr>
+<tr><td>Silesia mozilla-1M</td><td class="num">1048576</td><td class="num">642092 (0.254)</td><td class="num">640657 (0.188)</td><td class="num">641476 RAW</td><td class="num">58.36 / 0.02</td><td class="num">0.037 / 28.6</td><td class="num">-0.10%</td></tr>
+<tr><td>Silesia sao-1M</td><td class="num">1048576</td><td class="num">649244 (0.396)</td><td class="num">732075 (0.278)</td><td class="num">650308 RAW</td><td class="num">44.26 / 0.02</td><td class="num">0.041 / 25.6</td><td class="num">+0.16%</td></tr>
+<tr><td>Silesia x-ray-1M</td><td class="num">1048576</td><td class="num">536616 (0.280)</td><td class="num">630299 (0.228)</td><td class="num"><strong>477317 SHUFFLE_2</strong></td><td class="num">35.94 / 0.03</td><td class="num">0.242 / 4.3</td><td class="num"><strong>-11.05%</strong></td></tr>
+</table>
+<p class="mut">Honest notes: compress at 0.01–0.03 MB/s on hard 1M blocks is the bottleneck (MDL tries ~18 transforms × lzma each; C made transform time negligible, backend search dominates). Decompression 1.6–350 MB/s. 1M-sample wins are samples, not full files — the full-file Silesia table (11 ties + x-ray -3.9%) stands. Reproduce: <code>python deep_compress/bench_461.py --only &lt;name&gt;</code>, rows in <code>bench461.jsonl</code> (gitignored scratch).</p>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v4.6 — 2026-09-03 — Pure C SHUFFLE 141x BIT 308x DELTA 111x via w64devkit</strong></summary>
 <p class="mut">Hybrid C+Python: <code>rissa/c_shuffle.c</code> <code>rissa/c_bit.c</code> <code>rissa/c_delta.c</code> pure C <code>O3 -mavx2</code> <code>E:\w64devkit\bin\gcc 16.2.0</code> <code>mingw32</code> — <code>20×1M</code> SHUFFLE <code>2.020s→0.014s 141×</code>, BIT <code>19.585s→0.063s 308×</code>, DELTA <code>3.22s→0.029s 111×</code> bit-identical. <code>transforms_v2.py</code> <code>HAS_C_*</code> fallback to Python.</p>
 <table><tr><th>Transform</th><th>Python 20×1M</th><th>C 20×1M</th><th>Speedup</th></tr>
 <tr><td>SHUFFLE stride-4</td><td class="num">2.020s</td><td class="num">0.014s</td><td class="num"><strong>141×</strong></td></tr>

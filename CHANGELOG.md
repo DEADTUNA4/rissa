@@ -2,6 +2,29 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## v4.6.1 — 2026-09-04 — Timed end-to-end benchmark + RLE pre-pass + rissa[arrow]
+
+**Added:** generic `RLE` pre-pass (`>BH` pairs, 65K chunk split) as MDL-gated TID 19 — 5MB `x` → 231B pre-backend; `rissa[arrow]` extra (`pyarrow>=13`) + `RissaCodec` shim (`pa.Buffer`/buffer-protocol, `register()` documents that true `pa.Codec('rissa')` needs the C++ side); `rissa/arrow_glue.c` zero-copy Arrow-buffer → SHUFFLE/DELTA (`w64devkit`, bit-identical); `draft/pyarrow-codec` branch with C++ registration notes (`docs/arrow-pr.md`).
+
+**Benchmark** (`deep_compress/bench_461.py`, single 1M blocks, lzma backend, 1 run + roundtrip assert; micro 5 reps; i7-8750H, Python 3.13.14):
+
+Micro — C active, bit-identical: SHUFFLE 1358.3 MB/s, BIT 344.2 MB/s, DELTA 1188.1 MB/s.
+
+| Corpus | Orig | xz -9 (s) | zstd-19 (s) | rissa | comp s / MB/s | decomp s / MB/s | hist | vs xz |
+|--------|------|-----------|-------------|-------|---------------|-----------------|------|-------|
+| counter-1M | 1048576 | 512 (0.038) | 358 (0.005) | 544 | 0.30 / 3.49 | 0.003 / 313.6 | RAW | +6.25% |
+| json-log-1M | 1048576 | 364 (0.035) | 179 (0.005) | 396 | 0.27 / 3.89 | 0.003 / 350.5 | RAW | +8.79% |
+| sensor-480K | 480000 | 193608 (0.101) | 272962 (0.062) | 100881 | 21.87 / 0.02 | 0.078 / 6.2 | SHUFFLE_8 | -47.89% |
+| columnar-1M | 1048576 | 65260 (0.341) | 142502 (0.267) | 1725 | 71.17 / 0.01 | 0.17 / 6.2 | SHUFFLE4_DELTA | -97.36% |
+| Silesia dickens-1M | 1048576 | 310152 (0.417) | 313515 (0.364) | 310272 | 120.27 / 0.01 | 0.019 / 55.4 | RAW | +0.04% |
+| Silesia nci-1M | 1048576 | 68852 (0.336) | 70518 (0.602) | 64612 | 140.74 / 0.01 | 0.008 / 123.5 | RAW | -6.16% |
+| Silesia xml-1M | 1048576 | 124300 (0.224) | 125030 (0.404) | 117404 | 105.39 / 0.01 | 0.672 / 1.6 | BWT_SUBBLOCK | -5.55% |
+| Silesia mozilla-1M | 1048576 | 642092 (0.254) | 640657 (0.188) | 641476 | 58.36 / 0.02 | 0.037 / 28.6 | RAW | -0.10% |
+| Silesia sao-1M | 1048576 | 649244 (0.396) | 732075 (0.278) | 650308 | 44.26 / 0.02 | 0.041 / 25.6 | RAW | +0.16% |
+| Silesia x-ray-1M | 1048576 | 536616 (0.280) | 630299 (0.228) | 477317 | 35.94 / 0.03 | 0.242 / 4.3 | SHUFFLE_2 | -11.05% |
+
+**Read honestly:** compress speed (0.01–0.03 MB/s on hard 1M blocks) is the bottleneck — MDL tries ~18 transforms × lzma each per block; the C transforms made transform time negligible, backend search dominates. Decompression is 1.6–350 MB/s (no search). The nci/xml/x-ray 1M-sample wins (-5 to -11%) are samples, not full files — the full-file Silesia table (11 ties + x-ray -3.9%) stands. nci-1M shows `RAW` yet -6.16%: rissa's lzma path settings differ from plain `xz -9`; reported as measured. Sensor row is 480KB (generator output), labeled as such.
+
 ## v4.6 — 2026-09-03 — Pure C SHUFFLE/BIT/DELTA 141-308x via w64devkit
 
 **Added:** `rissa/c_shuffle.c` `rissa/c_bit.c` `rissa/c_delta.c` pure `C` `O3 -mavx2` `E:\w64devkit\bin\gcc` `mingw32` — `SHUFFLE 141×` `20×1M` `2.020s→0.014s`, `BIT 308×` `19.585s→0.063s`, `DELTA 111×` `3.22s→0.029s`, `w64devkit` `GCC 16.2.0` `MSVCRT` `pthreads`, `no pyx`, `rissa/c_shuffle.cp313-win_amd64.pyd` `bit-identical` fallback `shuffle_cpu` if `ImportError`.

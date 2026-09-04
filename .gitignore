@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.rissa
 *.rissa.tmp
+bench*.jsonl
 silesia/
 silesia.zip
 deep_compress/silesia/
