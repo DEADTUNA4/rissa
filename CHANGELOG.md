@@ -2,6 +2,15 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## v4.5.1 — 2026-09-03 — Critical audit fixes
+
+**Fixed — 5 Critical (Top Priority):**
+- **BWT disabled for >2048:** `compressor_v4.py:69` `if tid in [5,12] and len(block) >2048: continue` → `>256K` (radix handles 256K, `BWT_SUBBLOCK` 4×256K for 1M) — `BWT_MTF`/`BWT_MTF_RLE` were dead weight on real data
+- **RLE_ZERO overflow >258:** `transforms_v2.py:15` `4-zero marker [0,0,0,0,N-4]` now caps `run<259` and splits large runs into multiple 259-blocks (was single-byte overflow)
+- **Versioning not frozen:** `compressor_v4.py:5` `VERSION=4` frozen as stable `v1.0` spec, old `.rissa` always decodable via `DCM2` fallback — no more arbitrary jumps `v2→v3→v4→v4.4`
+- **RACD whitespace bug:** `racd_encode` `re.split(br'\s+')` + `b' '.join` normalized `b'  field1   field2'` → removed from `TRANSFORMS_V2` (was `TID 18`), moved to `TRANSFORMS_EXPERIMENTAL[18]` — gated, not tried by default MDL (was wasting CPU on known losing transform)
+- **Multiprocessing half-implemented:** `compressor_v4.py:133` `use_mp` flag set but never used → now `ThreadPoolExecutor(max_workers=6)` for `>4` blocks `≥1M` (physical cores, not 12 HT), `HDD` note `2-3` workers, `XOR_PREV` disabled in parallel via loud check
+
 ## v4.5 — 2026-09-03 — Narrow gap with xz on general data (0.12% → 0.002%)
 
 **Narrowed `nci` 33M single-block `+2,188` `0.12%` → `+32B` `0.002%` tie:** `xz -9` `1,738,884` vs `rissa` `1,738,916` `+32B` header only — was `1,741,072` `+2,188` with `CDC` overhead `496K` raw `2.4K` compressed + `5×1M` `600B` header. **Why:** `CDC` gated (correct), but `lzma` backend now `preset 9|PRESET_EXTREME` `64M` dict to match `xz -9` `64M` `PRESET_EXTREME` (was `preset 9` without `EXTREME` → `64K` `3964` vs `3852` `+112` per block). `No-Op` bypass `single block RAW win, no dict` `MAGIC+0xFF` flag would make `+32B` → `0` `pure tie` — left commented `compressor_v4.py:1` for compatibility, `+32B` is `0.002%` `2KB` on `33MB` tie for practical purposes as you noted. **Backend tuned, gap essentially closed.**

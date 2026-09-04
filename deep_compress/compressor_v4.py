@@ -1,5 +1,5 @@
 """
-rissa v4.5: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
+rissa v4.5.1: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
 Format v4.4: global dict MDL-gated, variable blocks, chains, fast mode
 
 Implements user spec:
@@ -22,7 +22,7 @@ except ImportError:
     from .huffman import huffman_encode_block, huffman_decode_block
 
 MAGIC = b"RISA"
-VERSION = 4
+VERSION = 4  # Frozen at 4 for stable format v1.0 spec — future changes must be backward compatible, old .rissa files always decodable via fallback to v3/v2
 EXT = ".rissa"
 
 BLOCK_1M = 1*1024*1024
@@ -270,7 +270,7 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         out.extend(struct.pack(">I", 0))
 
     # Adaptive priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text
-    priority_order = [0, 18, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
+    priority_order = [0, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
     # Early termination threshold: if RAW+LZMA achieves >90% of entropy, skip others
     # Compute entropy sample
     from collections import Counter
@@ -287,13 +287,113 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     # Each block independent — XOR_PREV is NOT compatible with parallel (prev_block_raw not shared) or streaming
     # Loud check: if use_mp and XOR_PREV would be used, disable XOR_PREV to avoid silent corruption
     use_mp = len(blocks) > 4 and block_size >= BLOCK_1M
-    if use_mp:
-        # Disable XOR_PREV in parallel mode to avoid silent wrong decode
-        # If caller truly needs XOR_PREV, they must use sequential mode (use_dict=False or small file)
-        pass  # will skip tid 99 below when use_mp
     # Note: benchmark files on Seagate HDD — speed tests use in-memory data (no I/O) to avoid HDD bound; ratio is storage-independent
     # Fast mode: more aggressive early termination at 90% entropy
     entropy_threshold = 1.2 if fast else 1.1
+
+    # If multiprocessing, use ProcessPoolExecutor with 6 workers for RAM (12 logical, but 6 physical avoids HT overhead)
+    # For HDD, use 2-3 workers to avoid I/O bottleneck — here we use 6 for in-memory, caller can pass use_mp=False for HDD
+    if use_mp:
+        import concurrent.futures
+        # Prepare args for parallel: each block with its index and prev_block (but prev not shared, so XOR disabled)
+        # Use imap to maintain order, reuse pool for whole file
+        def _compress_one_block(args):
+            idx, block = args
+            # Re-implement per-block MDL here for parallel (without prev_block dependency)
+            best_tid = 0
+            best_extra = b""
+            best_payload = None
+            best_size = float('inf')
+            best_name = "RAW"
+            # Use same priority_order and logic as below, but without XOR_PREV
+            import lzma, zlib
+            try:
+                import zstandard as zstd
+                has_zstd = True
+            except:
+                has_zstd = False
+            from collections import Counter
+            import math
+            def shannon_local(d):
+                if not d: return 0
+                c = Counter(d)
+                n2 = len(d)
+                return -sum((v/n2)*math.log2(v/n2) for v in c.values())
+            ent = shannon_local(block)
+            ent_bytes = ent/8*len(block) if block else 0
+            # Import transforms
+            try:
+                from transforms_v2 import TRANSFORMS_V2
+                from huffman import huffman_encode_block
+            except:
+                from .transforms_v2 import TRANSFORMS_V2
+                from .huffman import huffman_encode_block
+            for tid in priority_order:
+                if tid not in TRANSFORMS_V2: continue
+                name, enc, dec = TRANSFORMS_V2[tid]
+                if tid in [5,12] and len(block) > 256*1024:
+                    continue
+                try:
+                    transformed, extra = enc(block)
+                except:
+                    continue
+                if transformed is None:
+                    continue
+                if backend == "lzma":
+                    preset_to_use = 6 if dict_to_use else level
+                    try:
+                        if dict_to_use:
+                            comp = lzma.compress(transformed, preset=preset_to_use, preset_dict=dict_to_use)
+                        else:
+                            comp = lzma.compress(transformed, preset=preset_to_use)
+                    except:
+                        comp = lzma.compress(transformed, preset=preset_to_use)
+                    size = len(comp)
+                elif backend == "zstd" and has_zstd:
+                    cctx = zstd.ZstdCompressor(level=level)
+                    comp = cctx.compress(transformed)
+                    size = len(comp)
+                elif backend == "zlib":
+                    comp = zlib.compress(transformed, level)
+                    size = len(comp)
+                else:
+                    encd, freq, pad,_ = huffman_encode_block(transformed)
+                    comp = encd
+                    size = len(comp) + 512
+                total = size + 1 + len(extra)
+                if total < best_size:
+                    best_size = total
+                    best_tid = tid
+                    best_extra = extra
+                    best_payload = comp
+                    best_name = name
+                    if total < len(block) * 0.01:
+                        break
+            return (idx, best_tid, best_extra, best_payload, best_name, len(block))
+
+        # Use 6 workers for RAM (physical cores), not 12 to avoid HT overhead
+        max_workers = 6
+        # For HDD, caller should use max_workers=2-3, but here we use 6 for in-memory
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Need to handle that dict_to_use and other vars need to be picklable - for now, use ThreadPool for simplicity to avoid spawn overhead on Windows
+            # On Windows, spawn overhead high, so use ThreadPool for now
+            import concurrent.futures as cf
+            # Fallback to ThreadPool for Windows to avoid pickle large blocks
+            with cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
+                results = list(ex.map(_compress_one_block, [(i, b) for i, b in enumerate(blocks)]))
+        # Reassemble in order
+        results.sort(key=lambda x: x[0])
+        for idx, best_tid, best_extra, best_payload, best_name, orig_len in results:
+            block = blocks[idx]
+            chosen.append(best_name)
+            out.append(best_tid & 0xFF)
+            out.append(len(best_extra))
+            out.extend(struct.pack(">I", orig_len))
+            out.extend(struct.pack(">I", len(best_payload)))
+            out.extend(best_extra)
+            out.extend(best_payload)
+        from collections import Counter
+        return bytes(out), Counter(chosen), dict_to_use
 
     for idx, block in enumerate(blocks):
         best_tid = 0
@@ -307,8 +407,11 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         for tid in priority_order:
             if tid not in TRANSFORMS_V2: continue
             name, enc, dec = TRANSFORMS_V2[tid]
-            if tid in [5,12] and len(block) > 2048:
-                continue
+            # BWT now supports up to 256K via radix, sub-block handles 1M+ - don't disable at 2K
+            if tid in [5,12] and len(block) > 256*1024:
+                # For >256K, use BWT_SUBBLOCK (16) instead, which handles 1M via 4x256K
+                if tid in [5,12]:
+                    continue
             # Check cache
             cache_key = tid
             if cache_key in cache:

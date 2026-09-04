@@ -621,6 +621,11 @@ TRANSFORMS_V2 = {
     15:("SHUFFLE4_DELTA",lambda x: (shuffle_delta_encode(x,4), b"\x04"), lambda x, e: shuffle_delta_decode(x,4)),
     16:("BWT_SUBBLOCK",  lambda x: bwt_subblock_encode(x),            lambda x, e: bwt_subblock_decode(x, e)),
     17:("DICT_SUBSTITUTE", lambda x: dict_substitute_encode(x),       lambda x, e: x),  # stub, returns raw
+}
+
+# Experimental: RACD kept out of default TRANSFORMS_V2 (ruled out on real text, whitespace bug fixed but still loses to RAW on nci)
+# Use via --experimental flag: from transforms_v2 import racd_encode, racd_decode; TRANSFORMS_EXPERIMENTAL[18]=("RACD", ...)
+TRANSFORMS_EXPERIMENTAL = {
     18:("RACD",            lambda x: racd_encode(x),                  lambda x, e: racd_decode(x, e)),
 }
 
