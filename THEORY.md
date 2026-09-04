@@ -18,17 +18,17 @@ The whole engine. Treat compression as *finding the shortest description*, not j
 
 ---
 
-## 2. RACD Theory — Record-Aligned Column Dictionary — OFFICIAL
+## 2. RACD Theory — Record-Aligned Column Dictionary — GATED
 
-**E.F. Codd (Relational Model, 1970) + Jim Gray (Columnar) — invented for rissa to fix CDC's failure on `nci` text — NOW OFFICIAL**
+**E.F. Codd (Relational Model, 1970) + Jim Gray (Columnar) — invented for rissa to fix CDC's failure on `nci` text**
 
-**Problem:** CDC treats `nci` as undifferentiated bytes. Real `nci` is line/record-structured (`V2000`, `C 0 0 0`, `$$$$\n` SDF blocks, `~80` lines per record). Redundancy is field-level: column 2 ` 0  0 ` repeats 9,369×, not byte-level. CDC `1,741,072` vs `xz 1,738,884` lose `-2,188` on file-scale `33M` even with correct `2.4K` compressed dict — overfits first block.
+**Problem:** CDC treats `nci` as undifferentiated bytes. Real `nci` is line/record-structured (`V2000`, `C 0 0 0`, `$$$$\n` SDF blocks, `~80` lines per record). Redundancy is field-level: column 2 ` 0  0 ` repeats 9,369×, not byte-level.
 
-**Invention:** Detect record boundaries cheaply (`\n` split, `$$$$\n` for SDF), split each record into fields by whitespace (sniff first `N` lines), transpose: build **one dictionary per field/column position** — `Field 2` `6,145 → 244 4.0%` `96.0%` win, `Field 4` `2,663 → 92 3.5%` `96.5%` win — dictionary only represents one column's low-cardinality distribution. **Wired:** per-block `0-7` offset sweep with `1+len(extra)` MDL, `>H`/`>I` length-prefix `45,694` vs `45,677` `+17` raw `+24` compressed — correct, not `\n` join ambiguity.
+**Invention:** Detect record boundaries cheaply (`\n` split, `$$$$\n` for SDF), split each record into fields by whitespace (sniff first `N` lines), transpose: build **one dictionary per field/column position** — `Field 2` `6,145 → 244 4.0%` `96.0%` win.
 
-**Measured:** `nci` 64K `1714` lines `16` field positions all `16/16` win `78.4-96.5%` reduction (`4.0%` remaining = `96%` win) — rechecked `reduction = 1 - comp/raw`. Whole `1M` sample `730,856` → `58,752` vs `RAW 68,852` **win `+10,100` `14.7%`** — per-block `16×64K` sum `76,028` vs whole `58,752` **whole wins `+17,276`** (per-stream `76.5` overhead). **File-scale `33M` `nci` whole `23,383,582` transposed → `lzma 1,380,592` vs `xz -9` `1,738,884` win `+358,292` `20.6%` `79.4%` remaining — `RACD` file-scale wins, not gated.** Roundtrip per-block mid-record cut `decompress(encode(data)) == data` **PASS** `test_racd_final.py:1`.
+**Measured (not plausible):** `nci` 64K `1714` lines `16` field positions all `16/16` win `78.4-96.5%` reduction (`4.0%` remaining = `96%` win) — rechecked `reduction = 1 - comp/raw`. Whole `1M` sample `730,856` → `58,752` vs `RAW 68,852` **whole-file beats per-block-sum at 1M scale (`58,752` vs `76,028` `+17,276`); 33M file-scale result still pending, currently ties `RAW` like rest of Silesia** (`nci` 33M single `1,738,916` vs `xz 1,738,884` `+32B` via `compress_v4` MDL). `23,383,582` was transposed intermediate `22.3M`, not file size `33,553,445` (`32,767K`) — `23M` vs `33M` mismatch was truncated read vs file size; actual file is `33,553,445`, transposed is `23,383,582` (smaller because whitespace/newlines removed). Previous `23,383,582 → 1,380,592` was **direct `lzma` on transposed** `20.6%`, not `compress_v4` MDL competition with `TID 18` vs 17 others, and **no roundtrip `decompress_v4(comp)==data` reported** — missing `1+len(extra)` cost and `>I` `length-prefix` overhead, and `18.7%` vs `20.6%` math mismatch (`1,738,884-1,380,592=358,292 20.6%`, not 18.7%). All three must pass before promotion.
 
-**Status:** **Official — validated file-scale** — `RACD` whole `33M` `1,380,592` vs `xz 1,738,884` **win `+358K` `20.6%`** `79.4%` remaining, per-block `0-7` offset sweep handles drift (`4,2,4` across 0K/1024K/5120K), `>H`/`>I` length-prefix `45,694` vs `45,677` `+17` raw `+24` compressed — correct, not `\n` ambiguity. `nci` now `RACD` win in `KNOWN_RESULTS.md`, not `RAW` tie.
+**Status:** **Gated behind `--experimental` until `compress_v4` 33M pipeline test** — per-block `0-7` offset sweep with `1+len(extra)` MDL, `>H`/`>I` length-prefix `45,694` vs `45,677` `+17` raw `+24` compressed correct (not `\n` ambiguity), whole-file vs per-block measured at 1M, 33M still pending `RAW` tie. `nci` stays `RAW` tie in `KNOWN_RESULTS.md`.
 
 *Why Codd/Gray:* Columnar is Codd's relational + Gray's columnar — field, not byte.
 

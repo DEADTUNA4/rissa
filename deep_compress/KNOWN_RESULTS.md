@@ -9,7 +9,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 | `dickens` | text | 9.9M | 2764K | 2764K | **tie** `+32B` | `RAW` | per-block loses cross-block without dict |
 | `mozilla` | exe | 50M | 13061K | 13061K | tie | `RAW` | |
 | `mr` | text | 9.7M | 2686K | 2686K | tie | `RAW` | |
-| `nci` | chemical DB `SDF` `V2000` | 32M | 1698K | **1380K** | **WIN -18.7%** | `RACD` `23,383,582` transposed `→ 1,380,592` `20.6%` win vs `xz` `1,738,884` (single 64K `RAW` 3965 wins all 18, but file-scale `RACD` whole `33M` wins) |
+| `nci` | chemical DB `SDF` `V2000` | 32M | 1698K | 1698K | tie | `RAW` | `64K` `RAW` 3965 wins all 18/18, file-scale `RACD` `23,383,582` transposed is `22.3M` intermediate not `33M` file, direct `lzma` `20.6%` not `compress_v4` MDL, no roundtrip reported — gated, not promoted |
 | `ooffice` | binary | 6M | 2370K | 2370K | tie | `RAW` | |
 | `osdb` | db | 9.8M | 2783K | 2783K | tie | `RAW` | |
 | `reymont` | text | 6.4M | 1286K | 1286K | tie | `RAW` | |
@@ -34,7 +34,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 
 **Reframed target (was "structured/sensor/log columnar"):**
 
-> **Actual evidence:** **2 real wins** `x-ray` `BIT_PLANE -3.9%` + **`nci` `RACD -18.7%` file-scale `33M`** + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` now `RACD` win `20.6%` on full `33M` `23M` transposed `→ 1,380,592` vs `xz 1,738,884`, `SDF` `V2000` `80` lines/record drift handled per-block `0-7` sweep `4,2,4` + `>H`/`>I` length-prefix `45,694` correct. `nci` 64K `RAW` still wins all 18/18 (`FLOAT_SPLIT` `+1700` correctly loses on text `SDF`, not misaligned). **Truer claim:** `rissa` wins on **record-aligned columnar** (`nci` `RACD` + `x-ray` `BIT_PLANE`) and ties on general text — `RACD` is official, not gated.
+> **Actual evidence:** **1 real win** `x-ray` `BIT_PLANE -3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` is **tie** `RAW` full 18/18 (`FLOAT_SPLIT` `+1700` correctly loses on text `SDF`, `RACD` 64K `10.3%` and 1M `14.7%` wins are `lzma` on transposed sample, not `compress_v4` MDL, no roundtrip, file `33,553,445` vs transposed `23,383,582` mismatch, `20.6%` vs `18.7%` math mismatch). **Truer claim:** `rissa` wins on **bit-plane separable** (`x-ray`) and ties on general structured — `RACD` remains **gated** `--experimental` until `compress_v4` 33M pipeline `TID 18` vs 17 others `>I` prefix `1+len(extra)` + roundtrip `decompress_v4(comp)==data` on `33M` shows win.
 
 **Roundtrip:** Verified `decompress_v4(comp)==data` on all 12 Silesia single-block + `nci` 64K `RAW`/`FLOAT_SPLIT` + `x-ray` `SHUFFLE4_DELTA` — **PASS** `deep_compress/test_roundtrip.py`.
 
