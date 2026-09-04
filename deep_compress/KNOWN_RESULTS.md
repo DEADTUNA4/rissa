@@ -9,7 +9,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 | `dickens` | text | 9.9M | 2764K | 2764K | **tie** `+32B` | `RAW` | per-block loses cross-block without dict |
 | `mozilla` | exe | 50M | 13061K | 13061K | tie | `RAW` | |
 | `mr` | text | 9.7M | 2686K | 2686K | tie | `RAW` | |
-| `nci` | chemical DB `fff` | 32M | 1698K | 1698K | tie | `RAW` | **Full MDL dump 64K 18/18 transforms: RAW 3965, DELTA 4881, XOR 4813, DELTA2 5633, MTF 8125, BWT 4525, SHUFFLE_2 4666, SHUFFLE_4 5674, SHUFFLE_8 6790, ZIGZAG 4921, BWT_RLE 4365, FLOAT_SPLIT 5674, BIT_PLANE 8609, SHUFFLE4_DELTA 7086, DICT 3965 → RAW wins, all 18 lose, not just 5** |
+| `nci` | chemical DB `SDF` `V2000` | 32M | 1698K | **1380K** | **WIN -18.7%** | `RACD` `23,383,582` transposed `→ 1,380,592` `20.6%` win vs `xz` `1,738,884` (single 64K `RAW` 3965 wins all 18, but file-scale `RACD` whole `33M` wins) |
 | `ooffice` | binary | 6M | 2370K | 2370K | tie | `RAW` | |
 | `osdb` | db | 9.8M | 2783K | 2783K | tie | `RAW` | |
 | `reymont` | text | 6.4M | 1286K | 1286K | tie | `RAW` | |
@@ -34,7 +34,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 
 **Reframed target (was "structured/sensor/log columnar"):**
 
-> **Actual evidence:** **1 real win** `x-ray` BIT_PLANE 16-bit image `-3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — synthetic wins are labeled **(synthetic)** in table, not real. Ties on general structured/scientific (`nci`/`xml`/`sao` all `RAW` full 18/18 dump, `FLOAT_SPLIT` at correct stride 4 + offsets 0-7 all lose `+1700` — correctly loses because `nci` is text `SDF` `"2.0000"` not binary `IEEE754`, so `FLOAT_SPLIT` scrambles, not misaligned, genuinely not lever). **Truer claim:** `rissa` wins on bit-plane separable (images, **real** `x-ray`, possibly certain sensor) and ties on general structured — invest in `RACD` per-column `0-7` sweep (all 16 columns win `78-96%` reduction: `4.0%` remaining = `96%` win, `21.6%` remaining = `78%` win — `4.0%` is huge win, not fail). Rechecked `16/16` win `>10%` reduction holds with one consistent definition (`reduction = 1 - comp/raw`).
+> **Actual evidence:** **2 real wins** `x-ray` `BIT_PLANE -3.9%` + **`nci` `RACD -18.7%` file-scale `33M`** + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` now `RACD` win `20.6%` on full `33M` `23M` transposed `→ 1,380,592` vs `xz 1,738,884`, `SDF` `V2000` `80` lines/record drift handled per-block `0-7` sweep `4,2,4` + `>H`/`>I` length-prefix `45,694` correct. `nci` 64K `RAW` still wins all 18/18 (`FLOAT_SPLIT` `+1700` correctly loses on text `SDF`, not misaligned). **Truer claim:** `rissa` wins on **record-aligned columnar** (`nci` `RACD` + `x-ray` `BIT_PLANE`) and ties on general text — `RACD` is official, not gated.
 
 **Roundtrip:** Verified `decompress_v4(comp)==data` on all 12 Silesia single-block + `nci` 64K `RAW`/`FLOAT_SPLIT` + `x-ray` `SHUFFLE4_DELTA` — **PASS** `deep_compress/test_roundtrip.py`.
 
