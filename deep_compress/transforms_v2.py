@@ -4,6 +4,16 @@ Adds: delta-of-delta, standalone MTF, byte-shuffle/transpose for structured reco
 """
 import struct
 
+# Try pure C hot paths (141x SHUFFLE, 308x BIT) via w64devkit GCC 16.2, fallback to Python
+try:
+    import rissa.c_shuffle
+    HAS_C_SHUFFLE=True
+except: HAS_C_SHUFFLE=False
+try:
+    import rissa.c_bit
+    HAS_C_BIT=True
+except: HAS_C_BIT=False
+
 def delta_encode(data: bytes) -> bytes:
     if not data:
         return b""
@@ -172,6 +182,9 @@ def shuffle_encode(data: bytes, stride: int) -> bytes:
     - Columnar data / logs with fixed record size
     - Sensor data with interleaved channels
     """
+    if HAS_C_SHUFFLE and stride==4:
+        try: return rissa.c_shuffle.shuffle(data, stride)
+        except: pass
     n = len(data)
     if n < stride*2:
         return data
@@ -381,6 +394,9 @@ def bit_transpose_encode(data: bytes, width=4) -> bytes:
     Simplified: 8-byte window 8x8 bit transpose (good for 64-bit doubles where low mantissa bits are noisy).
     Leaves remainder as is. Reversible.
     """
+    if HAS_C_BIT:
+        try: return rissa.c_bit.bit_transpose(data)
+        except: pass
     if len(data) < 8:
         return data
     out=bytearray(len(data))

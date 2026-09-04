@@ -15,7 +15,7 @@ dependencies = ["zstandard"]
 requires-python = ">=3.9"
 
 [project.scripts]
-rissa = "deep_compress.rissa:main"
+rissa = "deep_compress.cli:main"
 
 [project.urls]
 Homepage = "https://rissa.web.app"
@@ -28,3 +28,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["deep_compress", "rissa"]
+
