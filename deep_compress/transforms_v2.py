@@ -375,6 +375,25 @@ def rle_zero_decode(data: bytes) -> bytes:
             i+=1
     return bytes(out)
 
+def rle_encode(data: bytes) -> bytes:
+    import struct
+    from itertools import groupby
+    out = bytearray()
+    for k, g in groupby(data):
+        n = sum(1 for _ in g)
+        while n > 0:
+            c = n if n <= 65535 else 65535
+            out += struct.pack(">BH", k, c)
+            n -= c
+    return bytes(out)
+
+def rle_decode(data: bytes) -> bytes:
+    import struct
+    out = bytearray()
+    for i in range(0, len(data) - len(data) % 3, 3):
+        out += bytes([data[i]]) * struct.unpack(">H", data[i+1:i+3])[0]
+    return bytes(out)
+
 def float_split_encode(data: bytes) -> bytes:
     """Float-aware: split IEEE754 32-bit floats into 4 streams. cf. Gorilla. Only if len%4==0 and looks like floats"""
     if len(data)<8 or len(data)%4!=0:
@@ -652,6 +671,7 @@ TRANSFORMS_V2 = {
     15:("SHUFFLE4_DELTA",lambda x: (shuffle_delta_encode(x,4), b"\x04"), lambda x, e: shuffle_delta_decode(x,4)),
     16:("BWT_SUBBLOCK",  lambda x: bwt_subblock_encode(x),            lambda x, e: bwt_subblock_decode(x, e)),
     17:("DICT_SUBSTITUTE", lambda x: dict_substitute_encode(x),       lambda x, e: x),  # stub, returns raw
+    19:("RLE",             lambda x: (rle_encode(x), b""),              lambda x, e: rle_decode(x)),
 }
 
 # Experimental: RACD kept out of default TRANSFORMS_V2 (ruled out on real text, whitespace bug fixed but still loses to RAW on nci)

@@ -270,7 +270,7 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         out.extend(struct.pack(">I", 0))
 
     # Adaptive priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text
-    priority_order = [0, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
+    priority_order = [0, 19, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
     # Early termination threshold: if RAW+LZMA achieves >90% of entropy, skip others
     # Compute entropy sample
     from collections import Counter

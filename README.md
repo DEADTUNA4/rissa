@@ -64,22 +64,33 @@ More → [`GUIDE.md`](GUIDE.md) · [`FORMAT.md`](FORMAT.md) · [`ARCHITECTURE.md
 
 ## Benchmarks
 
-Real data, Silesia pending 68MB re-download for thesis test (was deleted for clean):
+Honest numbers: Silesia 12-file corpus (211MB) + synthetic columnar. rissa ties `xz -9` on general data, wins where structure exists.
 
-| Corpus | xz -9 | rissa 128K | Bits/Sym |
-|--------|-------|------------|----------|
-| NOAA binary sensor 500K | 213K | **238K** `SHUFFLE_8` | 3.82 vs 6.83 ent |
-| Yellow Taxi parquet 2M (ent 8.00) | 1,997K | **1,996K tie** | 7.99 at limit |
-| Silesia dickens 2MB | **586K** | 714K `RAW` | +21% need dict |
-| Synthetic Counter 5KB | 324 | **71** `-78%` `DELTA` | proves transform |
+| Corpus | Size | xz -9 | rissa v4 single-block | Result |
+|--------|------|-------|----------------------|--------|
+| Silesia dickens | 9.9M | 2764K | 2764K `RAW` | tie +32B |
+| Silesia mozilla | 50M | 13061K | 13061K `RAW` | tie +32B |
+| Silesia mr | 9.7M | 2686K | 2686K `RAW` | tie +32B |
+| Silesia nci | 32M | 1698K | 1698K `RAW` | tie +32B |
+| Silesia ooffice | 6.0M | 2370K | 2370K `RAW` | tie +32B |
+| Silesia osdb | 9.8M | 2783K | 2783K `RAW` | tie +32B |
+| Silesia reymont | 6.4M | 1286K | 1286K `RAW` | tie +32B |
+| Silesia samba | 21M | 3675K | 3675K `RAW` | tie +32B |
+| Silesia sao | 7.0M | 4312K | 4312K `RAW` | tie +32B |
+| Silesia webster | 40M | 8189K | 8189K `RAW` | tie +32B |
+| Silesia **x-ray** | 8.2M | 4385K | **4212K** `BIT_PLANE` | **WIN -3.9%** |
+| Silesia xml | 5.2M | 443K | 443K `RAW` | tie +32B |
+| Columnar 3.6M *(synthetic)* | 3.6M | 204K | **39K** `SHUFFLE_8` | **WIN -80%** |
+| Sensor 6M *(synthetic)* | 6M | 1610K | **1038K** `SHUFFLE` | **WIN -35%** |
+| 5MB `x`×5M | 5M | 620 | 924 `RAW` | +32B header |
 
-Per-block alone loses cross-block on text - rissa wins on sensor/columnar where transforms expose structure. Full tables `https://rissa.web.app/benchmarks.html` and `deep_compress/PHASE3_REPORT.md`.
+That's **11 ties + 1 win + 1 massive (synthetic) win**. Per-block MDL alone can't beat `xz`'s 8MB window on general text — rissa wins on bit-plane-separable and columnar data where transforms expose structure. Full tables `https://rissa.web.app/benchmarks.html` and `deep_compress/PHASE3_REPORT.md`.
 
 Reproduce:
 
 ```bash
 python deep_compress/download_corpora.py
-python deep_compress/test_roundtrip.py  # 16T + 200 fuzz
+python deep_compress/test_roundtrip.py  # 19T + 200 fuzz
 python deep_compress/final_bench.py
 ```
 
