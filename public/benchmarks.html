@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
-<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4.2 Pure CPU in-memory</h1><p class="mut">rissa v4.2 · single-block &lt;=4M + 1M/4M · LZMA preset_dict + CDC + BWT_SUBBLOCK · Reproduce: <code>python deep_compress/bench_two_modes.py</code> · Silesia 11 ties + x-ray WIN</p>
+<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4.3 Pure CPU in-memory</h1><p class="mut">rissa v4.3 · CDC gated not promoted · single-block &lt;=4M + BWT_SUBBLOCK + range coder gated <code>--experimental</code> · Reproduce: <code>python deep_compress/bench_two_modes.py</code></p>
 <p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD — ratio storage-independent, speed may be I/O-bound) · Pure CPU in-memory <code>rissa.compress(data)</code> (no HDD) vs Full pipeline I/O · Multiprocessing 12 threads max (6 RAM / 2-3 HDD) · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
 <section>
 <h2>v4 Pure CPU in-memory — rissa.compress(data) (no HDD)</h2>
@@ -24,11 +24,21 @@
 <h2>Why not synthetic counters?</h2>
 <p>Synthetic <code>bytes([i%256])</code> is not sensor data. Real NOAA binary is <code>&lt;I fff&gt;</code> structs with jitter — needs <code>DELTA_ZIGZAG</code> + <code>SHUFFLE</code>. Use your 1MB+ raw dump in <code>corpora/</code>.</p>
 
-<h2>Version History — Scroll down to see older</h2>
-<p class="mut">Newest at top. See how far rissa has come from pure Huffman to LZMA preset_dict.</p>
+<h2>Version History — Scroll down to see older (latest first)</h2>
+<p class="mut">Newest at top — v4.3 is latest. See how far rissa has come.</p>
 
 <details open style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
-<summary><strong>v4.2 — 2026-09-03 — Silesia 11 ties + x-ray WIN + single-block adaptive</strong> <span class="badge">current</span></summary>
+<summary><strong>v4.3 — 2026-09-03 — CDC gated, not promoted + single-block tie</strong> <span class="badge">current</span></summary>
+<p class="mut">CDC <code>1,741,072</code> vs <code>xz 1,738,884</code> <strong>lose -2,188 (0.12%)</strong> before earlier 64K win <code>3524 vs 3964 +440</code> — why didn't replicate: dict overfits first block, other blocks +0, file-scale spread-sample still lose. Dict overhead 496K raw → 2.4K compressed (7.6%) correctly stored, still lose. <strong>Not promoted</strong> — gated behind <code>--experimental</code>, <code>nci</code> stays <code>RAW</code> tie.</p>
+<table><tr><th>Corpus</th><th>xz -9</th><th>rissa v4.3</th><th>Result</th></tr>
+<tr><td>nci 33M file-scale</td><td class="num">1,738,884</td><td class="num">1,741,072</td><td class="num">lose -2,188 +0.12% (CDC gated)</td></tr>
+<tr><td>nci 64K first block</td><td class="num">3964</td><td class="num">3524</td><td class="num">win +440 (only first block, not general)</td></tr>
+<tr><td>x-ray 8.2M</td><td class="num">4385K</td><td class="num">4212K WIN -3.9%</td><td class="num">BIT_PLANE real win</td></tr>
+</table>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v4.2 — 2026-09-03 — Silesia 11 ties + x-ray WIN + single-block adaptive</strong></summary>
 <p class="mut">Single-block <code>&lt;=4M</code> adaptive (was 5×1M), CDC, <code>BWT_SUBBLOCK</code> 4×256K, hard early-stop <code>&lt;1%</code> 10×, <code>MAGIC RISA v4</code> 32B header — Silesia thesis test</p>
 <table><tr><th>Corpus</th><th>Orig</th><th>xz -9</th><th>rissa v4.2 single</th><th>Result</th></tr>
 <tr><td>dickens 9.9M</td><td class="num">2764K</td><td class="num">2764K</td><td class="num"><strong>2764K tie</strong></td><td class="num">RAW +32B</td></tr>

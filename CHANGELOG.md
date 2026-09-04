@@ -2,6 +2,12 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## v4.3 — 2026-09-03 — CDC gated, not promoted + Silesia single-block tie
+
+**CDC result — actual loss before earlier win:** File-scale `nci` 33M `xz -9` **1,738,884** vs `CDC+lzma 9` `1,738,632` + compressed dict `2,440` = **1,741,072 lose -2,188 (0.12%)** (was 64K single-block `3524 vs 3964 WIN +440` on first block only). **Why it didn't replicate:** dict built from first 64K overfits first block, other blocks at 1024K/5120K all `+0` tie — redundancy concentrated near start (header/boilerplate), not general. Spread-sample `3×512K` still `1,741,072` lose. **Not promoted:** CDC remains gated behind `--experimental`, `nci` stays `RAW` tie in `KNOWN_RESULTS.md` — not shipped as working feature, correctly gated experiment.
+
+**Added:** `BWT_SUBBLOCK` 1M→4×256K sub-blocks, `BIT_TRANSPOSE` 8×8, `SHUFFLE4_DELTA` composition with loud cost comment `transforms_v2.py:15`, `bwt_range.py` range coder draft gated, `cdc_dict.py` `FE FE` escape fuzzed.
+
 ## v4.1 — 2026-09-03 — Adaptive + Dict Gate + Early-stop
 
 **Added:**
