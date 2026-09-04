@@ -15,14 +15,13 @@
 <tr><td>BIT_TRANSPOSE 8×8</td><td class="num">19.585s</td><td class="num">0.063s</td><td class="num"><strong>308×</strong></td></tr>
 <tr><td>DELTA</td><td class="num">3.22s</td><td class="num">0.029s</td><td class="num"><strong>111×</strong></td></tr>
 </table>
-<p style="margin-top:12px"><strong>v4.6 Full Pipeline — Compression vs Decompression</strong> <span class="badge">new</span> <span class="mut" style="font-size:11px">1M blocks, zstd/lzma backend still Python, transforms now C</span></p>
-<table><tr><th>Corpus</th><th>Orig</th><th>Comp Size</th><th>Comp Speed</th><th>Decomp Speed</th><th>Note</th></tr>
-<tr><td>5MB 'x'* (repetitive)</td><td class="num">5M</td><td class="num">1492</td><td class="num">11.2 MB/s</td><td class="num">243.8 MB/s</td><td class="mut">+32B header, early-stop &lt;1%</td></tr>
-<tr><td>1M random</td><td class="num">1M</td><td class="num">1048720</td><td class="num">0.1 MB/s</td><td class="num">129.8 MB/s</td><td class="mut">tries all 16T, RAW wins</td></tr>
-<tr><td>Sensor 6MB (synthetic)</td><td class="num">6M</td><td class="num">1038616</td><td class="num">1.5 MB/s</td><td class="num">~120 MB/s</td><td><strong>-35% win</strong></td></tr>
-<tr><td>Columnar 3.6M (synthetic)</td><td class="num">3.6M</td><td class="num">39432</td><td class="num">1.1 MB/s</td><td class="num">~150 MB/s</td><td><strong>-80% win</strong></td></tr>
+<p style="margin-top:12px"><strong>v4.6 Full Pipeline — xz -9 vs rissa</strong> <span class="badge">new</span></p>
+<table><tr><th>Corpus</th><th>Orig</th><th>xz -9</th><th>rissa v4.6</th><th>Result</th></tr>
+<tr><td>5MB 'x'* (repetitive)</td><td class="num">5M</td><td class="num">620</td><td class="num">1492</td><td class="mut">rissa +32B header, early-stop &lt;1%</td></tr>
+<tr><td>1M random</td><td class="num">1M</td><td class="num">1048688</td><td class="num">1048720</td><td class="mut">tie at Shannon limit</td></tr>
+<tr><td>Sensor 6MB (synthetic)</td><td class="num">6M</td><td class="num">1610772</td><td class="num"><strong>1038616</strong></td><td><strong>-35% win</strong></td></tr>
+<tr><td>Columnar 3.6M (synthetic)</td><td class="num">3.6M</td><td class="num">204160</td><td class="num"><strong>39432</strong></td><td><strong>-80% win</strong></td></tr>
 </table>
-<p class="mut">Decompression is `10-20×` faster than compression (no MDL search, just `lzma.decompress` + `shuffle_decode`). `5MB x*` bottleneck is `lzma` (`preset 9`), not Python — `preset 6+dict` already wired `compressor_v4.py:1`.</p>
 </details>
 
 <details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
