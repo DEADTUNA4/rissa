@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "deep_compress"))
 
 from deep_compress.compressor_v3 import compress_with_dict, decompress_with_dict
-from deep_compress.rans import shannon_entropy
+from deep_compress.huffman import shannon_entropy
 
 def cli_compress(inp, out, block, use_dict, backend="zstd"):
     data = pathlib.Path(inp).read_bytes()
@@ -34,6 +34,34 @@ def cli_decompress(inp, out):
     t=time.perf_counter()-t0
     pathlib.Path(out).write_bytes(dec)
     print(f"rissa decompress: {len(data)} -> {len(dec)} time {t:.2f}s -> {out}")
+
+def cli_doctor():
+    import platform
+    try:
+        import rissa
+        rissa_ver = getattr(rissa, "__version__", "unknown")
+    except Exception as e:
+        rissa_ver = f"import failed: {e}"
+    print(f"rissa {rissa_ver} on {platform.system()} {platform.machine()} {platform.python_version()}")
+    for mod, flag in [("rissa.c_shuffle", "HAS_C_SHUFFLE"), ("rissa.c_bit", "HAS_C_BIT"), ("rissa.c_delta", "HAS_C_DELTA")]:
+        try:
+            __import__(mod)
+            print(f"  {flag}=True ({mod} loads)")
+        except Exception as e:
+            print(f"  {flag}=False ({mod}: {type(e).__name__}: {e})")
+    try:
+        import deep_compress.transforms_v2 as T
+        print(f"  transforms_v2 flags: SHUFFLE={T.HAS_C_SHUFFLE} BIT={T.HAS_C_BIT} DELTA={T.HAS_C_DELTA}")
+    except Exception as e:
+        print(f"  transforms_v2: import failed: {e}")
+    for mod in ["zstandard", "lzma", "zlib", "bz2"]:
+        try:
+            __import__(mod)
+            print(f"  backend {mod}: available")
+        except Exception as e:
+            print(f"  backend {mod}: MISSING ({e})")
+    import sys
+    print(f"  frozen={getattr(sys, 'frozen', False)}")
 
 def launch_gui():
     import tkinter as tk
@@ -138,11 +166,14 @@ if __name__=="__main__":
     d=sub.add_parser("decompress", help="decompress")
     d.add_argument("input"); d.add_argument("-o","--output", required=True)
     g=sub.add_parser("gui", help="launch GUI")
+    sub.add_parser("doctor", help="report C extensions + backends (no silent fallback)")
     args=ap.parse_args()
     if args.cmd=="compress":
         cli_compress(args.input, args.output, args.block, args.use_dict)
     elif args.cmd=="decompress":
         cli_decompress(args.input, args.output)
+    elif args.cmd=="doctor":
+        cli_doctor()
     elif args.cmd=="gui" or args.cmd is None:
         launch_gui()
     else:

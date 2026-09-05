@@ -45,6 +45,26 @@ pip install -e .
 
 Requires `zstandard` (optional, falls back to `zlib`), Python 3.9+.
 
+### Building the C extensions from source
+
+The hot paths (`SHUFFLE`/`BIT`/`DELTA`, 111–308× vs Python) ship as
+`rissa/c_*.c` with `setup.py` + `setup.cfg` already on main — no extra step:
+
+```bash
+python setup.py build_ext --inplace   # uses setup.cfg
+python tools/rissa_tool.py doctor     # must show HAS_C_*=True
+```
+
+Run `doctor` after building: without it a broken toolchain fails
+*silently* into correct-but-slow Python fallback (`HAS_C_*=False`).
+
+Platform status, stated plainly: **Windows + MinGW-w64
+(`E:\w64devkit`-style layout, `compiler=mingw32`) is the tested path.**
+`setup.py` picks MSVC flags (`/O2 /arch:AVX2`) only with explicit
+`--compiler=msvc`, and plain `-O3` (+AVX2 on x86-64) elsewhere — but
+**Linux/Mac builds are untested, so treat non-Windows as
+not-yet-cross-platform** until someone verifies a build there.
+
 ## Basic usage
 
 ```python

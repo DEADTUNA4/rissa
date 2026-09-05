@@ -84,6 +84,16 @@ def huffman_decode_block(encoded: bytes, freq, padding, original_len):
             node = tree
     return bytes(out)
 
+def shannon_entropy(data: bytes) -> float:
+    """Shannon entropy in bits/symbol. Home for tools/rissa_tool.py after archive/rans.py retirement."""
+    import math
+    from collections import Counter
+    if not data:
+        return 0.0
+    freq = Counter(data)
+    n = len(data)
+    return -sum((c / n) * math.log2(c / n) for c in freq.values())
+
 def estimate_huffman_size(data: bytes):
     """Fast estimate without building bitstream - sum freq * codelen"""
     if len(data)==0:
