@@ -1,6 +1,6 @@
 # Known Results — rissa Single Source of Truth
 
-**Updated: 2026-09-03 — v4.4 — Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
+**Updated: 2026-09-04 — v4.6.1 — Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
 
 This is the standing table — win/tie/loss per file type, updated as we go. Do not re-derive from chat history.
 
@@ -35,6 +35,8 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 **Reframed target (was "structured/sensor/log columnar"):**
 
 > **Actual evidence:** **1 real win** `x-ray` `BIT_PLANE -3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` is **tie** `RAW` full 18/18. **RACD: tested and ruled out on real text data. Its apparent win throughout development was caused by whitespace-normalization correctness bug; once fixed to `re.split(b'(\\s+)')` preserving `32` cols, `RACD` `95,160` vs `65,536` raw `+45%` and `7421` vs `3965` lose. Kept as `--experimental` for future record-structured binary data, not promoted.** **Truer claim:** `rissa` wins on **bit-plane separable** (`x-ray`) and ties on general structured — next lever is `SHUFFLE` stride detection on real columnar.
+
+> **Backend-settings correction (v4.6.1, see problem.md #27):** rissa's lzma path uses `preset 9|PRESET_EXTREME` while published `xz -9` baselines use plain `preset=9`. Controlled same-input split: nci-1M's -6.16% is 100% flag effect — reclassified as tie (fair baseline `xz -9e` gives +32B tie). At same preset, transform-confirmed and reversible-verified: xml-1M `BWT_SUBBLOCK` -4.05%, x-ray-1M `SHUFFLE_2` -10.68%, sensor `SHUFFLE_8` -47.9%, columnar `SHUFFLE4_DELTA` -97.4%. Sample-level supporting evidence only — no full-file promotions; `nci`/`xml` full-file rows above stand as ties.
 
 **Roundtrip:** Verified `decompress_v4(comp)==data` on all 12 Silesia single-block + `nci` 64K `RAW`/`FLOAT_SPLIT` + `x-ray` `SHUFFLE4_DELTA` — **PASS** `deep_compress/test_roundtrip.py`.
 

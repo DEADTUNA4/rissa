@@ -33,6 +33,7 @@ This is the exhaustive list of problems found during v1-v4.4, with status and fi
 | 18 | **`silesia.zip` 68M + `corpora/*.parquet` 46M tracked as untracked** | **Fixed** `.gitignore:1` `deep_compress/silesia/` `deep_compress/corpora/` etc |
 | 25 | **`THEORY.md` §8 rANS "gated `--experimental`" overstates like README did** | **Open** — needs the same correction README just got: range path is Huffman-placeholder scaffolding (`bwt_range.py:169-171`), no rANS implemented anywhere |
 | 26 | **`deep_compress/THEORY.md:17` stale count + wrong TID numbers** | **Open** — says `(16)` with `DELTA:5`, `XOR_DELTA:18`, `DELTA2:12`; actual registry is 19 TIDs (0–17 + 19, 18 experimental) with `DELTA=1`, `XOR_DELTA=2`, `DELTA2=3`. Same stale-count class as the README `16T` fix; no doc currently claims 18-as-active (verified) |
+| 27 | **v4.6.1 bench: rissa lzma path uses `9|PRESET_EXTREME`, baseline plain `preset=9`** | **Resolved (mechanism proven, not a transform win)** - controlled same-input test on nci-1M: plain `68852` vs extreme `64580`; rissa stored `64612` = extreme `+32B` header. The -6.16% is 100% flag effect, 0% transform. Fair baseline for the lzma path is `xz -9e`, against which nci-1M is a +32B tie. Decomposition at same preset (all reversible-verified): xml `119264` vs `124300` (-4.05% transform), x-ray `479308` vs `536616` (-10.68%), sensor `100860` vs `193608` (-47.9%), columnar `1696` vs `65260` (-97.4%) - all transform-confirmed |
 
 ## Low — Nice to have, hold off
 
