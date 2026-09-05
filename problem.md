@@ -31,6 +31,8 @@ This is the exhaustive list of problems found during v1-v4.4, with status and fi
 | 16 | **`compressor_v4.py` docstring `Implements user spec:` outside `"""` → `SyntaxError` at `2. Block`** | **Fixed** `"""` wrap |
 | 17 | **`bwt_encode` priority `len(block) >256K` before `block` defined `UnboundLocalError`** | **Fixed** static `priority_order` |
 | 18 | **`silesia.zip` 68M + `corpora/*.parquet` 46M tracked as untracked** | **Fixed** `.gitignore:1` `deep_compress/silesia/` `deep_compress/corpora/` etc |
+| 25 | **`THEORY.md` §8 rANS "gated `--experimental`" overstates like README did** | **Open** — needs the same correction README just got: range path is Huffman-placeholder scaffolding (`bwt_range.py:169-171`), no rANS implemented anywhere |
+| 26 | **`deep_compress/THEORY.md:17` stale count + wrong TID numbers** | **Open** — says `(16)` with `DELTA:5`, `XOR_DELTA:18`, `DELTA2:12`; actual registry is 19 TIDs (0–17 + 19, 18 experimental) with `DELTA=1`, `XOR_DELTA=2`, `DELTA2=3`. Same stale-count class as the README `16T` fix; no doc currently claims 18-as-active (verified) |
 
 ## Low — Nice to have, hold off
 
