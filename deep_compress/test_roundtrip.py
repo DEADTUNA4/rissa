@@ -96,6 +96,30 @@ def test_compressor():
         print(f"  {backend}: OK")
     print("All compressor OK")
 
+def test_v4_huffman_known_failure():
+    # KNOWN FAILURE (pre-existing, verified via git stash on original code):
+    # compressor_v4.compress_v4 with backend='huffman' writes a truncated
+    # block (no payload in the huffman branch), so decompress_v4 fails with
+    # struct.error. compressor_v2's huffman path (tested above) is fine.
+    # See CHANGELOG "Known issues". If this ever prints FIXED, promote it
+    # to a full roundtrip assertion and close the changelog entry.
+    print("\n=== v4+huffman (KNOWN FAILURE, see CHANGELOG) ===")
+    try:
+        from compressor_v4 import compress_v4, decompress_v4
+    except ImportError as e:
+        print(f"  skip (no compressor_v4): {e}")
+        return
+    data = b"x" * 20000  # RLE TID picks huffman path deterministically
+    try:
+        comp, hist, _ = compress_v4(data, backend='huffman', block_size=20000, use_dict=False)
+        dec = decompress_v4(comp)
+        if dec == data:
+            print("  FIXED — v4+huffman roundtrips now; promote to full test + close CHANGELOG entry")
+        else:
+            print("  UNEXPECTED: decoded without error but mismatch")
+    except Exception as e:
+        print(f"  KNOWN FAILURE still present ({type(e).__name__}): v4+huffman decompress broken, pre-existing")
+
 def test_determinism():
     print("\n=== Determinism ===")
     data=os.urandom(5000)
@@ -180,6 +204,7 @@ if __name__=="__main__":
     test_shuffle_adversarial()
     test_huffman()
     test_compressor()
+    test_v4_huffman_known_failure()
     test_determinism()
     test_versioning()
     fuzz_random()

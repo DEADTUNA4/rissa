@@ -2,6 +2,10 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## Known issues
+
+- **v4 huffman backend decompress is broken (pre-existing).** `compressor_v4.compress_v4(backend='huffman')` writes a truncated block (huffman branch emits no payload), so `decompress_v4` fails with `struct.error`. Verified pre-existing via `git stash` on original code — not a regression. Not used by any default path (defaults are lzma/zstd/zlib); `compressor_v2`'s huffman path roundtrips fine. Tracked by `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py`, which prints FIXED if behavior ever changes.
+
 ## v4.6.1 — 2026-09-04 — Timed end-to-end benchmark + RLE pre-pass + rissa[arrow]
 
 **Added:** generic `RLE` pre-pass (`>BH` pairs, 65K chunk split) as MDL-gated TID 19 — 5MB `x` → 231B pre-backend; `rissa[arrow]` extra (`pyarrow>=13`) + `RissaCodec` shim (`pa.Buffer`/buffer-protocol, `register()` documents that true `pa.Codec('rissa')` needs the C++ side); `rissa/arrow_glue.c` zero-copy Arrow-buffer → SHUFFLE/DELTA (`w64devkit`, bit-identical); `draft/pyarrow-codec` branch with C++ registration notes (`docs/arrow-pr.md`).
