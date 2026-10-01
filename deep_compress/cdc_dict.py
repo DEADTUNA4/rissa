@@ -6,6 +6,10 @@ import struct
 
 def rabin_karp_cdc(data: bytes, window=64, mask=0xFFF):
     """Content-defined chunking: cut when hash & mask == 0 (avg 4K chunks)"""
+    try:
+        import rissa.c_stat as _CS
+        return [bytes(data[s:e]) for s, e in _CS.cdc_bounds(bytes(data), 1024, 8192, 1024, mask, 0xBF)]
+    except: pass
     chunks = []
     h = 0
     start = 0

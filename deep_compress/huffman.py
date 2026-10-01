@@ -6,6 +6,15 @@ import heapq
 import struct
 from collections import Counter
 
+try:
+    import rissa.c_huff
+    HAS_C_HUFF = True
+except: HAS_C_HUFF = False
+try:
+    import rissa.c_stat
+    HAS_C_STAT = True
+except: HAS_C_STAT = False
+
 class Node:
     __slots__ = ('freq','symbol','left','right')
     def __init__(self, freq, symbol=None, left=None, right=None):
@@ -45,6 +54,21 @@ def build_codes(node, prefix="", codes=None):
             build_codes(node.right, prefix+"1", codes)
     return codes
 
+def _fit_freq_16(freq):
+    """Scale a 256-entry frequency table into 16-bit storable range.
+
+    Frequencies are stored as >H per symbol, so counts above 65535 (possible
+    in any block larger than 64KB of skewed data) would truncate and make the
+    decoder build a DIFFERENT tree -> silent misdecode. The encoder MUST build
+    its tree from the table returned here (the exact bytes the decoder reads).
+    Scaling is monotonic (ceil, nonzero stays nonzero) so the tree shape is
+    preserved; tables already in range pass through untouched (byte-identical).
+    """
+    mx = max(freq)
+    if mx <= 65535:
+        return list(freq)
+    return [(f * 65535 + mx - 1) // mx if f else 0 for f in freq]
+
 def huffman_encode_block(data: bytes):
     """Returns (encoded_bytes, freq_table, padding_bits, codes)"""
     if len(data)==0:
@@ -52,8 +76,15 @@ def huffman_encode_block(data: bytes):
     freq = [0]*256
     for b in data:
         freq[b]+=1
+    freq = _fit_freq_16(freq)  # encoder tree MUST match stored table (see above)
     tree = build_tree(freq)
     codes = build_codes(tree)
+    if HAS_C_HUFF:
+        try:
+            cl = [codes.get(i, "") for i in range(256)]
+            encd, padding = rissa.c_huff.pack(data, cl)
+            return bytes(encd), freq, padding, codes
+        except: pass
     # build bitstring
     bit_str = "".join(codes[b] for b in data)
     padding = (8 - len(bit_str) % 8) % 8
@@ -69,6 +100,12 @@ def huffman_decode_block(encoded: bytes, freq, padding, original_len):
     tree = build_tree(freq)
     if tree is None:
         return b""
+    if HAS_C_HUFF:
+        try:
+            codes = build_codes(tree)
+            cl = [codes.get(i, "") for i in range(256)]
+            return bytes(rissa.c_huff.unpack(encoded, cl, padding, original_len))
+        except: pass
     # convert to bitstring
     bit_str = "".join(f"{b:08b}" for b in encoded)
     if padding:
@@ -86,6 +123,11 @@ def huffman_decode_block(encoded: bytes, freq, padding, original_len):
 
 def shannon_entropy(data: bytes) -> float:
     """Shannon entropy in bits/symbol. Home for tools/rissa_tool.py after archive/rans.py retirement."""
+    if HAS_C_STAT:
+        try:
+            _, ent = rissa.c_stat.hist_entropy(data)
+            return float(ent)
+        except: pass
     import math
     from collections import Counter
     if not data:

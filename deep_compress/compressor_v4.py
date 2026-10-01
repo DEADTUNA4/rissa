@@ -13,13 +13,13 @@ Implements user spec:
 """
 import struct, os
 try:
-    from transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
-except ImportError:
     from .transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
-try:
-    from huffman import huffman_encode_block, huffman_decode_block
 except ImportError:
+    from transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
+try:
     from .huffman import huffman_encode_block, huffman_decode_block
+except ImportError:
+    from huffman import huffman_encode_block, huffman_decode_block
 
 MAGIC = b"RISA"
 VERSION = 4  # Frozen at 4 for stable format v1.0 spec — future changes must be backward compatible, old .rissa files always decodable via fallback to v3/v2
@@ -69,17 +69,24 @@ def build_lzma_dict(data: bytes, max_dict_size=64*1024, sample_size=1024*1024):
         sample = b"".join(chunks[:64])[:sample_size] if chunks else raw_sample[:sample_size]
     if len(sample) < 8192:
         return sample[:max_dict_size]
-    # Count 8-byte substrings
-    freq = {}
-    window = 8
-    # Use memoryview for speed
-    mv = memoryview(sample)
-    for i in range(len(sample) - window + 1):
-        sub = bytes(mv[i:i+window])
-        freq[sub] = freq.get(sub, 0) + 1
-    # Sort by freq, take top until dict_size
-    # Keep order as encountered for better LZMA, but prioritize frequent
-    sorted_subs = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+    # Count 8-byte substrings (C rank_ngrams: same order as Counter.most_common
+    # = count desc, first-seen ties; dict content affects ratio only, never correctness)
+    try:
+        import rissa.c_stat as _CS
+        _ranked = _CS.rank_ngrams(bytes(sample), 8, 3, 1000000)
+        # pack loop below only uses cnt for its >=3 gate: all qualify by construction
+        sorted_subs = [(s, 3) for s in _ranked]
+    except:
+        freq = {}
+        window = 8
+        # Use memoryview for speed
+        mv = memoryview(sample)
+        for i in range(len(sample) - window + 1):
+            sub = bytes(mv[i:i+window])
+            freq[sub] = freq.get(sub, 0) + 1
+        # Sort by freq, take top until dict_size
+        # Keep order as encountered for better LZMA, but prioritize frequent
+        sorted_subs = sorted(freq.items(), key=lambda x: x[1], reverse=True)
     dict_buf = bytearray()
     seen = set()
     for sub, cnt in sorted_subs:
@@ -323,11 +330,23 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
             ent_bytes = ent/8*len(block) if block else 0
             # Import transforms
             try:
-                from transforms_v2 import TRANSFORMS_V2
-                from huffman import huffman_encode_block
+                try:
+                    from .transforms_v2 import TRANSFORMS_V2
+                except ImportError:
+                    from deep_compress.transforms_v2 import TRANSFORMS_V2
+                try:
+                    from .huffman import huffman_encode_block
+                except ImportError:
+                    from deep_compress.huffman import huffman_encode_block
             except:
-                from .transforms_v2 import TRANSFORMS_V2
-                from .huffman import huffman_encode_block
+                try:
+                    from .transforms_v2 import TRANSFORMS_V2
+                except ImportError:
+                    from deep_compress.transforms_v2 import TRANSFORMS_V2
+                try:
+                    from .huffman import huffman_encode_block
+                except ImportError:
+                    from deep_compress.huffman import huffman_encode_block
             for tid in priority_order:
                 if tid not in TRANSFORMS_V2: continue
                 name, enc, dec = TRANSFORMS_V2[tid]
@@ -454,8 +473,8 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
                 size = len(comp)
             elif backend == "zstd" and has_zstd:
                 cctx = zstd.ZstdCompressor(level=level)
-                size = len(cctx.compress(transformed))
-                comp = cctx.compress(transformed)  # need payload
+                comp = cctx.compress(transformed)
+                size = len(comp)  # was compressing twice; output identical, half the work
             elif backend == "zlib":
                 comp = zlib.compress(transformed, level)
                 size = len(comp)
@@ -480,7 +499,10 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
             # Context-mixing: after BWT_MTF, try order-1 Huffman (can beat LZMA on BWT output, self-contained)
             if tid in [5,12] and backend == "lzma":  # BWT_MTF
                 try:
-                    from huffman import huffman_order1_encode_block
+                    try:
+                        from .huffman import huffman_order1_encode_block
+                    except ImportError:
+                        from deep_compress.huffman import huffman_order1_encode_block
                     enc1, _, _, _ = huffman_order1_encode_block(transformed)
                     # Order-1 header is large (256*...), but for BWT output it may still win
                     # For prototype, just estimate: if enc1 < comp, consider it
@@ -575,32 +597,56 @@ def decompress_v4(data: bytes):
     except: has_zstd=False
     if not data.startswith(MAGIC):
         # fallback to v3
-        from compressor_v3 import decompress_with_dict
+        try:
+            from .compressor_v3 import decompress_with_dict
+        except ImportError:
+            from deep_compress.compressor_v3 import decompress_with_dict
         return decompress_with_dict(data)
     pos=4
-    ver=data[pos]; pos+=1
-    backend_id=data[pos]; pos+=1
-    backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
-    num_blocks=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    block_size=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    dict_comp_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    dict_orig_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
+    def _need(n, what):
+        nonlocal pos
+        chunk = data[pos:pos+n]
+        if len(chunk) < n:
+            raise EOFError(f"truncated v4 .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
+        pos += n
+        return chunk
+    ver=_need(1, "version")[0]
+    if ver != 4:
+        # v2/v3 layouts differ (dict header, orig_len widths): delegate, don't misread.
+        try:
+            from .compressor_v3 import decompress_with_dict
+        except ImportError:
+            from deep_compress.compressor_v3 import decompress_with_dict
+        return decompress_with_dict(data)
+    backend_id=_need(1, "backend id")[0]
+    try:
+        backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
+    except KeyError:
+        raise ValueError(f"invalid backend id {backend_id} (expected 0-3)")
+    num_blocks=struct.unpack(">I", _need(4, "block count"))[0]
+    if num_blocks == 0xFFFFFFFF:
+        raise ValueError("streaming .rissa frame: use decompress_stream(), not decompress_v4()")
+    if num_blocks > 100000:
+        raise ValueError(f"implausible block count {num_blocks} (file likely corrupt)")
+    block_size=struct.unpack(">I", _need(4, "block size"))[0]
+    dict_comp_len=struct.unpack(">I", _need(4, "compressed dict length"))[0]
+    dict_orig_len=struct.unpack(">I", _need(4, "dict length"))[0]
     dict_bytes=None
     if dict_comp_len:
-        dict_compressed=data[pos:pos+dict_comp_len]; pos+=dict_comp_len
+        dict_compressed=_need(dict_comp_len, "dict")
         try:
             dict_bytes=lzma.decompress(dict_compressed)
         except:
             dict_bytes=dict_compressed
     out=bytearray()
     prev_block_raw=b""
-    for _ in range(num_blocks):
-        tid=data[pos]; pos+=1
-        extra_len=data[pos]; pos+=1
-        orig_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-        comp_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-        extra=data[pos:pos+extra_len]; pos+=extra_len
-        comp=data[pos:pos+comp_len]; pos+=comp_len
+    for bi in range(num_blocks):
+        tid=_need(1, f"block {bi} transform id")[0]
+        extra_len=_need(1, f"block {bi} extra length")[0]
+        orig_len=struct.unpack(">I", _need(4, f"block {bi} orig length"))[0]
+        comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
+        extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
+        comp=_need(comp_len, f"block {bi} payload")
         # Handle special TIDs
         if tid == 99: # XOR_PREV
             # Decompress then XOR decode
@@ -635,7 +681,9 @@ def decompress_v4(data: bytes):
             prev_block_raw = block[:orig_len]
             continue
         # Normal
-        _, enc_fn, dec_fn = TRANSFORMS_V2[tid] if tid in TRANSFORMS_V2 else (None, lambda x,_:(x,b""), lambda x,_:x)
+        if tid not in TRANSFORMS_V2:
+            raise ValueError(f"invalid transform id {tid} in block {bi} (expected 0-19, 99, 100)")
+        _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="lzma":
             try:
                 if dict_bytes:
@@ -656,8 +704,8 @@ def decompress_v4(data: bytes):
         # Need extra handling for transforms that need extra
         try:
             block = dec_fn(transformed, extra)
-        except:
-            block = transformed
+        except Exception as e:
+            raise ValueError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
         out.extend(block[:orig_len])
         prev_block_raw = block[:orig_len]
     return bytes(out)

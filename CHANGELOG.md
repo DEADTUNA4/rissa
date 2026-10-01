@@ -2,6 +2,44 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
+## v4.6.2 — 2026-10-01 — C ports, import fix, screening, v3 parallelism, audit fixes
+
+All 10 findings verified in code, all fixed, all regression-tested (`test_audit_regressions` in `test_roundtrip.py`; suite banner now distinguishes PASS / KNOWN-FAILURE / UNEXPECTED for CI).
+
+**RED (data loss / silent corruption):**
+- Streaming+huffman produced undecodable frames (decode branch was literally `pass`). `compress_stream` now refuses `huffman` with `ValueError`; `decompress_stream` raises instead of emitting nothing.
+- Huffman frequencies stored as `>H` truncated counts above 65535 (any skewed block >64KB) → decoder built a different tree → silent misdecode. Encoder now monotonically scales the table to 16-bit BEFORE building its tree, so both sides share the exact stored table. Tables in range pass through byte-identical.
+
+**ORANGE (corruption vectors / loudness):**
+- `BWT_SUBBLOCK` mixed 2/4B entries with a `0xFFFF` raw marker that collides with legitimate primary 65535 (and desyncs the stream). New layout: fixed 4B entries, `0xFFFFFFFF` raw marker (uncollidable); strict bounds; legacy files keep a byte-identical best-effort path.
+- Truncation could return partial output silently. All decoders (v2/v3/v4/stream) now raise `EOFError` naming field + offset; cross-version/cross-format feeds and unknown backend/transform IDs raise `ValueError`.
+- Streaming and normal layouts shared magic but differed structurally. Streaming frames now carry `0xFFFFFFFF` in the num_blocks slot; normal decoders reject them cleanly, stream decoder accepts sentinel + legacy. Public `rissa.decompress` dispatches on the `VER` byte (v4 files previously misdecoded via the v3 path).
+- v4 decoder no longer silently identity-passes unknown TIDs or failed transform decodes.
+
+**YELLOW (honesty):** v2 refuses blocks >65535B loudly (16-bit `ORIG_LEN`); TID 17 renamed `DICT_RESERVED` identity stub (int frozen for old files); suite banner reports the known-failure state. FORMAT.md documents sentinel, subblock layout, huffman scaling, and error behavior.
+
+**Added:** `rissa/c_trans.c` (`setup.py` + `rissa-tool.spec` hiddenimports) — C ports of the remaining slow Python transforms, wired into `transforms_v2.py` behind `HAS_C_TRANS` with Python fallback: generic-stride `shuffle` + `shuffle_decode` (had no C path), `float_split`, `delta2`, `xor`, `order2`, `d2zz`, `mtf`, `rle`, `rle_zero` + all decodes. Verified bit-identical vs Python on 12 adversarial cases (empty/1B/odd lengths/zero-runs >259/runs >65535/FITS block) + C-only roundtrips; `test_roundtrip.py` ALL PASSED; `doctor` reports `HAS_C_TRANS`.
+
+**Measured** (1M FITS block, i7-8750H): shuffle_2 71×, shuffle_8 66×, shuffle_decode 29×, delta2 113×, xor 109×, order2 132×, d2zz 63×, float_split 131×, rle 78×, mtf ~9× (O(256) pos-update remains — Fenwick is batch-2). Transform stage ≈3.0s → ≈0.16s per 1M (~19×). File-level wall clock is backend-dominated (zstd-19/lzma) + machine-noisy, so full-file time moves little — quality byte-identical (FITS re-run: same 3,286,048, SHUFFLE_4 ×65, roundtrip OK).
+
+**Remaining Python (deliberate):** order-1 Huffman, range-coder scaffold, GPU shuffle, MTF Fenwick, second CDC pass — dead/experimental paths where C buys nothing (see Port policy).
+
+**Added (batch-2):** `rissa/c_huff.c` (Huffman MSB-first pack/unpack, tree stays Python — zero divergence risk) + `rissa/c_stat.c` (one-pass hist_entropy, rank_ngrams with Counter-identical order, cdc_bounds matching both CDC variants) + BWT radix port inside `c_trans.c` (cyclic prefix-doubling, stable tie-break — identical order to Python on periodic data, no OOM/degeneration). Wired into `transforms_v2.bwt_encode/bwt_decode_fast`, `huffman_encode/decode_block`, `shannon_entropy`, `build_lzma_dict` 8-grams, `build_shared_dict` 6-grams, `rabin_karp_cdc`; `doctor` reports HUFF/STAT. Verified bit-identical (BWT incl. `banana`/`ababab`/60KB FITS, Huffman, ngrams on FITS+dickens, both CDC variants) + full `test_roundtrip.py` green.
+
+**Measured:** BWT 256K 0.14s (was seconds-per-64K Python — the max_block timeout cause is gone), Huffman 128K 0.02s, v4-1M-dict run OK with dict correctly MDL-gated off. Two C bugs found by testing, both fixed: counting array sized N+1 but early passes need 256 slots (small-input stack smash), and `O!`+`&PyList_Type` mis-links under this MinGW — use plain `O` + manual check (plus a dropped `&n` of our own making).
+
+**Added:** bug-report pipeline — every run logs to a file (`%LOCALAPPDATA%/rissa/logs/rissa.log`, exe-dir then temp fallback; `rissa_tool.py logs` prints the path), uncaught CLI errors print the log path + Discord invite (`https://discord.gg/wzpwcCv92j`) and exit 1, `sys.excepthook` logs tracebacks, Tkinter GUI mirrors its log pane to the file and gains **Copy log** + **Discord** buttons, native C GUI appends UTF-8 to `rissa_gui.log` next to its exe and gains a **Discord** button. Log globs gitignored. Verified: error path prints the Discord pointer, log records all runs.
+
+**Port policy (going forward):** default-path Python loops → C with bit-identity proof; dead paths (range-coder scaffold, order-1 experimental, GPU) stay Python with reasons recorded. Skipped: MTF Fenwick (MTF already 125MB/s C, BWT-gated anyway), order-1 pack (experimental), second CDC pass (experimental).
+
+**Rebuilt + reinstalled:** `dist/rissa-tool.exe` rebuilt (PyInstaller 6.19, frozen `doctor` all-True, exe roundtrip byte-identical); `pip install -e .` now 4.6.2 editable (needs w64devkit on PATH — `setup.cfg` forces `mingw32`; stale PyPI 3.0.0 removed). Library verified from outside the repo.
+
+**Fixed (critical, silent): circular import disabled ALL C extensions depending on entry point.** `rissa/__init__.py` did top-level `from deep_compress.compressor_v3 import ...`; whoever imported `deep_compress.compressor_v3` first (CLI, library API path, scripts) got a partially-initialized back-import, `rissa/__init__` raised, and every `HAS_C_*` silently fell back to `False` — all C extensions off, pure-Python speed, zero warning. `doctor` looked fine because it imports the `.pyd` files directly. Found because fast-mode screening picked RAW on dickens while exhaustive picked BWT_SUBBLOCK. Fix: `rissa/__init__.py` binds `compress`/`decompress` lazily (function-level imports); all in-package imports flipped to relative-first (`from .x import`, bare fallback); path inserts normalized+deduped (old code also polluted `sys.path` with un-normalized `..` chains). Verified all-True from every entry order, no shadow top-level modules.
+
+**Measured after the fix (C actually active):** exhaustive alone is ~4-7× faster than every number measured before (those runs were unknowingly pure-Python — FITS v3-64K 74s→17.2s, dickens-500K 22s→3.3s). Fast screening on top: FITS 17.2s→6.9s (2.49×), dickens 3.3s→1.0s (3.37×), sensor 2.6s→0.8s (3.17×) — all byte-identical including BWT_SUBBLOCK ×8 on dickens. Exe end-to-end: full 4.2MB FITS 11s compress / 0.04s decompress, roundtrip-identical. The old "--fast shows no speedup" conclusion is retracted (it was measured with C disabled).
+
+**Added:** v3 ThreadPool parallelism (same design as v4's `use_mp`): per-block MDL factored verbatim into `_eval_block_v3` (pure function, shared inputs read-only), `compress_with_dict(..., max_workers=None)` — None = auto (6 threads when >4 blocks, else serial), 1 = forced serial. Ordered reassembly → parallel output byte-identical (proven serial==auto==pool6 on FITS both modes + all backends both modes). FITS v3-64K: exhaustive-serial 16.2s → auto 4.3s (3.8×); fast-serial 7.1s → fast-auto 2.1s (3.4×); combined 16.2s→2.1s (**7.7×**, identical 3,286,048B). Full `test_roundtrip.py` green.**
+
 ## Known issues
 
 - **v4 huffman backend decompress is broken (pre-existing).** `compressor_v4.compress_v4(backend='huffman')` writes a truncated block (huffman branch emits no payload), so `decompress_v4` fails with `struct.error`. Verified pre-existing via `git stash` on original code — not a regression. Not used by any default path (defaults are lzma/zstd/zlib); `compressor_v2`'s huffman path roundtrips fine. Tracked by `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py`, which prints FIXED if behavior ever changes.

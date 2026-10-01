@@ -6,19 +6,146 @@ Compressor v3: Phase 1 Architecture Upgrades
 """
 import struct, os
 try:
-    from transforms_v2 import TRANSFORMS_V2
+    from .transforms_v2 import TRANSFORMS_V2, HAS_C_TRANS
 except ImportError:
-    from .transforms_v2 import TRANSFORMS_V2
+    from transforms_v2 import TRANSFORMS_V2, HAS_C_TRANS
 try:
-    from huffman import huffman_encode_block, huffman_decode_block
-except ImportError:
     from .huffman import huffman_encode_block, huffman_decode_block
+except ImportError:
+    from huffman import huffman_encode_block, huffman_decode_block
 
 BLOCK_SIZE_64K = 65536
 BLOCK_SIZE_128K = 131072
 MAGIC = b"RISA"  # rissa - homage to Jorma Rissanen MDL 1978
 VERSION = 3
 EXT = ".rissa"
+
+# BWT-family transforms: the Python radix sort cost ~8s per 128K block, so
+# fast mode used to skip them without even computing them. With C BWT active
+# (HAS_C_TRANS) they cost ~0.1s and rejoin the screen; without C the skip stays.
+BWT_TIDS = {5, 12, 16}
+
+def _encode_with_backend(transformed, backend, level, has_zstd, zstd_dict):
+    """Single backend encode. Returns (payload, size) with the same shapes
+    as the inline loop below (huffman payload is a tuple)."""
+    import lzma, zlib
+    if backend == "huffman":
+        encd, freq, pad, _ = huffman_encode_block(transformed)
+        return (encd, freq, pad), len(encd) + 512
+    elif backend == "zlib":
+        comp = zlib.compress(transformed, level)
+        return comp, len(comp)
+    elif backend == "lzma":
+        comp = lzma.compress(transformed, preset=level)
+        return comp, len(comp)
+    elif backend == "zstd":
+        if not has_zstd:
+            comp = zlib.compress(transformed, 9)
+            return comp, len(comp)
+        if zstd_dict:
+            import zstandard as zstd
+            cctx = zstd.ZstdCompressor(level=level, dict_data=zstd_dict)
+        else:
+            import zstandard as zstd
+            cctx = zstd.ZstdCompressor(level=level)
+        comp = cctx.compress(transformed)
+        return comp, len(comp)
+    raise ValueError(f"unknown backend {backend!r}")
+
+def _eval_block_v3(block: bytes, backend: str, level, has_zstd: bool, zstd_dict, fast: bool):
+    """Per-block MDL evaluation (fast screen + exhaustive fallback).
+
+    Pure function of its arguments: no cross-block state, shared inputs are
+    read-only. Safe to run in worker threads; same code path as the serial
+    loop, so serial and parallel output is byte-identical.
+    Returns (best_tid, best_extra, best_payload, best_name).
+    """
+    import lzma, zlib
+    try:
+        from .transforms_v2 import TRANSFORMS_V2
+    except ImportError:
+        from transforms_v2 import TRANSFORMS_V2
+    try:
+        from .huffman import huffman_encode_block
+    except ImportError:
+        from huffman import huffman_encode_block
+    best_tid = 0
+    best_extra = b''
+    best_payload = None
+    best_size = float('inf')
+    best_name = 'RAW'
+    # Fast path: screen with zlib-1, full-encode top-3 + RAW only.
+    # BWT family rejoins the screen when C BWT is active, else still skipped.
+    skip_bwt = fast and not HAS_C_TRANS
+    tids = [tid for tid in TRANSFORMS_V2 if not (skip_bwt and tid in BWT_TIDS)]
+    if fast and backend in ("lzma", "zstd") and tids:
+        tcache = {}
+        scored = []
+        for tid in tids:
+            name, enc, dec = TRANSFORMS_V2[tid]
+            if tid in [5, 12] and len(block) > 2048: continue
+            try:
+                transformed, extra = enc(block)
+            except:
+                continue
+            if transformed is None: continue
+            tcache[tid] = (transformed, extra)
+            try:
+                screen = len(zlib.compress(transformed, 1)) + 1 + len(extra)
+            except:
+                continue
+            scored.append((screen, tid))
+        if scored:
+            scored.sort(key=lambda t: (t[0], t[1]))
+            keep = {tid for _, tid in scored[:3]} | ({0} if 0 in tcache else set())
+            for tid in tids:
+                if tid not in keep: continue
+                name, enc, dec = TRANSFORMS_V2[tid]
+                transformed, extra = tcache[tid]
+                try:
+                    payload, size = _encode_with_backend(transformed, backend, level, has_zstd, zstd_dict)
+                except:
+                    continue
+                total = size + 1 + len(extra)
+                if total < best_size:
+                    best_size = total
+                    best_tid, best_extra, best_payload, best_name = tid, extra, payload, name
+        else:
+            pass  # screen found nothing usable; fall through to exhaustive
+    if best_payload is None:
+        # Exhaustive path (default; also fallback when screening yields nothing).
+        # NOTE: duplicated rather than refactored so default behavior is byte-identical.
+        for tid, (name, enc, dec) in TRANSFORMS_V2.items():
+            if tid in [5, 12] and len(block) > 2048: continue
+            transformed, extra = enc(block)
+            if transformed is None: continue
+            if backend == "huffman":
+                encd, freq, pad, _ = huffman_encode_block(transformed)
+                payload = (encd, freq, pad)
+                size = len(encd) + 512
+            elif backend == "zlib":
+                payload = zlib.compress(transformed, level)
+                size = len(payload)
+            elif backend == "lzma":
+                payload = lzma.compress(transformed, preset=level)
+                size = len(payload)
+            elif backend == "zstd":
+                if not has_zstd:
+                    payload = zlib.compress(transformed, 9)
+                else:
+                    if zstd_dict:
+                        import zstandard as zstd
+                        cctx = zstd.ZstdCompressor(level=level, dict_data=zstd_dict)
+                    else:
+                        import zstandard as zstd
+                        cctx = zstd.ZstdCompressor(level=level)
+                    payload = cctx.compress(transformed)
+                size = len(payload)
+            total = size + 1 + len(extra)
+            if total < best_size:
+                best_size = total
+                best_tid, best_extra, best_payload, best_name = tid, extra, payload, name
+    return best_tid, best_extra, best_payload, best_name
 
 def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
     """
@@ -42,24 +169,38 @@ def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
                     return db[:dict_size]
     except Exception as e:
         pass
-    # Fallback: frequent 6-grams
+    # Fallback: frequent 6-grams (C rank_ngrams matches Counter.most_common order)
     try:
-        from collections import Counter
-        counter = Counter()
-        for i in range(len(sample)-6):
-            counter[sample[i:i+6]] += 1
-        # most common that appear >=3
-        common = [k for k,v in counter.most_common(4096) if v>=3][:2048]
+        import rissa.c_stat as _CS
+        common = _CS.rank_ngrams(bytes(sample), 6, 3, 4096)[:2048]
+    except:
+        try:
+            from collections import Counter
+            counter = Counter()
+            for i in range(len(sample)-6):
+                counter[sample[i:i+6]] += 1
+            # most common that appear >=3
+            common = [k for k,v in counter.most_common(4096) if v>=3][:2048]
+        except:
+            return None
+    try:
         # pack as dict: join with 0 separator, truncate to dict_size
         db = b'\x00'.join(common)[:dict_size]
         return db if len(db) > 256 else None
     except:
         return None
 
-def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_SIZE_64K, use_dict=True):
+def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_SIZE_64K, use_dict=True, fast=False, max_workers=None):
     """
     Per-block MDL + shared dict header. Dict is stored once in file header and used for all blocks via zstd dict.
     Returns (compressed_bytes, hist, dict_bytes)
+    fast=True: two-stage MDL (zlib-1 screen -> full encode of top-3 + RAW) and
+    skip BWT-family transform computation. ~10x faster on structured data;
+    winners verified identical on sensor/columnar samples. Default False keeps
+    exhaustive search (published benchmark numbers).
+    max_workers: None = auto (6 threads when >4 blocks, else serial);
+    1 = forced serial; N = forced N threads. Parallel output is byte-identical
+    (ordered reassembly, same per-block function).
     """
     import lzma, zlib
     try:
@@ -110,40 +251,22 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
     else:
         out.extend(struct.pack(">I", 0))
     chosen=[]
-    for block in blocks:
-        best_tid=0
-        best_extra=b''
-        best_payload=None
-        best_size=float('inf')
-        best_name='RAW'
-        for tid,(name,enc,dec) in TRANSFORMS_V2.items():
-            if tid in [5,12] and len(block)>2048: continue
-            transformed, extra = enc(block)
-            if transformed is None: continue
-            if backend=="huffman":
-                encd, freq, pad,_ = huffman_encode_block(transformed)
-                payload=(encd,freq,pad)
-                size=len(encd)+512
-            elif backend=="zlib":
-                payload=zlib.compress(transformed, level)
-                size=len(payload)
-            elif backend=="lzma":
-                payload=lzma.compress(transformed, preset=level)
-                size=len(payload)
-            elif backend=="zstd":
-                if not has_zstd:
-                    payload=zlib.compress(transformed,9)
-                else:
-                    if zstd_dict:
-                        cctx=zstd.ZstdCompressor(level=level, dict_data=zstd_dict)
-                    else:
-                        cctx=zstd.ZstdCompressor(level=level)
-                    payload=cctx.compress(transformed)
-                size=len(payload)
-            total=size+1+len(extra)
-            if total < best_size:
-                best_size=total
-                best_tid, best_extra, best_payload, best_name = tid, extra, payload, name
+    # Per-block evaluation: serial or ThreadPool (blocks independent, shared
+    # inputs read-only; backends release the GIL, so threads scale).
+    if max_workers is None:
+        workers = 6 if len(blocks) > 4 else 1
+    else:
+        workers = max(1, max_workers)
+    if workers > 1 and len(blocks) > 1:
+        import concurrent.futures as _cf
+        import functools as _ft
+        _eval = _ft.partial(_eval_block_v3, backend=backend, level=level,
+                            has_zstd=has_zstd, zstd_dict=zstd_dict, fast=fast)
+        with _cf.ThreadPoolExecutor(max_workers=min(workers, len(blocks))) as _ex:
+            results = list(_ex.map(_eval, blocks))
+    else:
+        results = [_eval_block_v3(b, backend, level, has_zstd, zstd_dict, fast) for b in blocks]
+    for block, (best_tid, best_extra, best_payload, best_name) in zip(blocks, results):
         chosen.append(best_name)
         out.append(best_tid)
         out.append(len(best_extra))
@@ -172,41 +295,69 @@ def decompress_with_dict(data: bytes):
     if not data.startswith(MAGIC):
         # backward compat: accept old DCM2/DCM3
         if data.startswith(b"DCM2") or data.startswith(b"DCM3") or data.startswith(b"DCMP"):
-            from compressor_v2 import decompress_with_backend
+            try:
+                from .compressor_v2 import decompress_with_backend
+            except ImportError:
+                from deep_compress.compressor_v2 import decompress_with_backend
             return decompress_with_backend(data)
         raise ValueError(f"bad magic {data[:4]!r} expected RISA")
     pos=4
-    version=data[pos]; pos+=1
-    backend_id=data[pos]; pos+=1
-    backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
-    num_blocks=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    block_size=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    dict_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    dict_bytes=data[pos:pos+dict_len] if dict_len else None
-    pos+=dict_len if dict_len else 0
+    def _need(n, what):
+        nonlocal pos
+        chunk = data[pos:pos+n]
+        if len(chunk) < n:
+            raise EOFError(f"truncated .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
+        pos += n
+        return chunk
+    version=_need(1, "version")[0]
+    if version == 2:
+        # v2 layout differs (16-bit orig_len): delegate, don't misread as v3.
+        try:
+            from .compressor_v2 import decompress_with_backend
+        except ImportError:
+            from deep_compress.compressor_v2 import decompress_with_backend
+        return decompress_with_backend(data)
+    if version == 4:
+        raise ValueError("v4 .rissa frame: use decompress_v4(), not decompress_with_dict()")
+    if version != 3:
+        raise ValueError(f"unsupported .rissa version {version} (expected 2, 3 or 4)")
+    backend_id=_need(1, "backend id")[0]
+    try:
+        backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
+    except KeyError:
+        raise ValueError(f"invalid backend id {backend_id} (expected 0-3)")
+    num_blocks=struct.unpack(">I", _need(4, "block count"))[0]
+    if num_blocks == STREAM_SENTINEL:
+        raise ValueError("streaming .rissa frame: use decompress_stream(), not decompress_with_dict()")
+    if num_blocks > 100000:
+        raise ValueError(f"implausible block count {num_blocks} (file likely corrupt)")
+    block_size=struct.unpack(">I", _need(4, "block size"))[0]
+    dict_len=struct.unpack(">I", _need(4, "dict length"))[0]
+    dict_bytes=_need(dict_len, "dict") if dict_len else None
     zstd_dict=None
     if dict_bytes and has_zstd:
         try: zstd_dict=zstd.ZstdCompressionDict(dict_bytes)
         except: pass
     out=bytearray()
-    for _ in range(num_blocks):
-        tid=data[pos]; pos+=1
-        extra_len=data[pos]; pos+=1
-        orig_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
+    for bi in range(num_blocks):
+        tid=_need(1, f"block {bi} transform id")[0]
+        extra_len=_need(1, f"block {bi} extra length")[0]
+        orig_len=struct.unpack(">I", _need(4, f"block {bi} orig length"))[0]
+        if tid not in TRANSFORMS_V2:
+            raise ValueError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="huffman":
-            pad=data[pos]; pos+=1
-            freq=[struct.unpack(">H", data[pos+i*2:pos+i*2+2])[0] for i in range(256)]
-            pos+=512
-            enc_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-            extra=data[pos:pos+extra_len]; pos+=extra_len
-            encd=data[pos:pos+enc_len]; pos+=enc_len
+            pad=_need(1, f"block {bi} huffman padding")[0]
+            freq=[struct.unpack(">H", _need(2, f"block {bi} huffman freq {i}"))[0] for i in range(256)]
+            enc_len=struct.unpack(">I", _need(4, f"block {bi} huffman payload length"))[0]
+            extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
+            encd=_need(enc_len, f"block {bi} huffman payload")
             transformed=huffman_decode_block(encd, freq, pad, orig_len)
             out.extend(dec_fn(transformed, extra)[:orig_len])
         else:
-            comp_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-            extra=data[pos:pos+extra_len]; pos+=extra_len
-            comp=data[pos:pos+comp_len]; pos+=comp_len
+            comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
+            extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
+            comp=_need(comp_len, f"block {bi} payload")
             if backend=="zlib": transformed=zlib.decompress(comp)
             elif backend=="lzma": transformed=lzma.decompress(comp)
             elif backend=="zstd":
@@ -218,11 +369,19 @@ def decompress_with_dict(data: bytes):
     return bytes(out)
 
 # Streaming Frame API: for block in stream (no whole-file RAM)
+STREAM_SENTINEL = 0xFFFFFFFF  # num_blocks slot value marking a streaming frame (FORMAT.md)
+
 def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=BLOCK_SIZE_64K, use_dict=False):
     """
     Streaming: reads from in_stream (file-like) in blocks, writes frame header then per-block frames.
     Use for large files that don't fit RAM. If use_dict, first 1MB is buffered to build dict (one-pass still).
+    Header carries STREAM_SENTINEL in the num_blocks slot so the normal
+    decoder can reject streaming frames with a clean error instead of misdecoding.
+    huffman backend is REFUSED (stream frames have no frequency-table field;
+    added a clear ValueError rather than writing undecodable frames).
     """
+    if backend == "huffman":
+        raise ValueError("huffman backend is not supported for streaming: stream frames carry no frequency table (use zstd/lzma/zlib)")
     # For true streaming without dict, we can start immediately. With dict, need sample.
     if use_dict:
         # buffer first 1MB to build dict, then stream rest
@@ -237,6 +396,7 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=
         out_stream.write(MAGIC)
         out_stream.write(bytes([VERSION]))
         out_stream.write(bytes([{"huffman":0,"zlib":1,"lzma":2,"zstd":3}[backend]]))
+        out_stream.write(struct.pack(">I", STREAM_SENTINEL))  # streaming frame marker
         # we don't know num_blocks upfront for streaming -> use 0 as placeholder for streaming frame, or write dict len then stream blocks without count?
         # Simple: write block_size and dict
         out_stream.write(struct.pack(">I", block_size))
@@ -259,7 +419,10 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=
                 elif backend=="zlib": c=zlib.compress(tr, level)
                 elif backend=="lzma": c=lzma.compress(tr, preset=level)
                 else:
-                    from huffman import huffman_encode_block
+                    try:
+                        from .huffman import huffman_encode_block
+                    except ImportError:
+                        from deep_compress.huffman import huffman_encode_block
                     c,_,_,_ = huffman_encode_block(tr)
                 tot=len(c)+1+len(ex)
                 if tot < best_size:
@@ -291,6 +454,7 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=
         except: has_zstd=False
         out_stream.write(MAGIC)
         out_stream.write(bytes([VERSION, {"huffman":0,"zlib":1,"lzma":2,"zstd":3}[backend]]))
+        out_stream.write(struct.pack(">I", STREAM_SENTINEL))  # streaming frame marker
         out_stream.write(struct.pack(">I", block_size))
         out_stream.write(struct.pack(">I", 0))  # no dict
         while True:
@@ -306,7 +470,10 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=
                 elif backend=="zlib": c=zlib.compress(tr, level)
                 elif backend=="lzma": c=lzma.compress(tr, preset=level)
                 else:
-                    from huffman import huffman_encode_block
+                    try:
+                        from .huffman import huffman_encode_block
+                    except ImportError:
+                        from deep_compress.huffman import huffman_encode_block
                     c,_,_,_=huffman_encode_block(tr)
                 tot=len(c)+1+len(ex)
                 if tot<best_size:
@@ -326,41 +493,59 @@ def decompress_stream(in_stream, out_stream):
     magic=in_stream.read(4)
     if magic==b"DCM2":
         # v2 fallback - not streaming
-        from compressor_v2 import decompress_with_backend
+        try:
+            from .compressor_v2 import decompress_with_backend
+        except ImportError:
+            from deep_compress.compressor_v2 import decompress_with_backend
         data=magic+in_stream.read()
         out_stream.write(decompress_with_backend(data))
         return
     assert magic==MAGIC
-    ver=in_stream.read(1)[0]
-    backend_id=in_stream.read(1)[0]
-    backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
-    block_size=struct.unpack(">I", in_stream.read(4))[0]
-    dict_len=struct.unpack(">I", in_stream.read(4))[0]
-    dict_bytes=in_stream.read(dict_len) if dict_len else None
+    def _sread(n, what):
+        chunk = in_stream.read(n)
+        if len(chunk) < n:
+            raise EOFError(f"truncated streaming .rissa file: {what} needs {n}B, stream ended")
+        return chunk
+    ver=_sread(1, "version")[0]
+    if ver not in (3, 4):
+        raise ValueError(f"unsupported streaming version {ver} (expected 3 or 4)")
+    backend_id=_sread(1, "backend id")[0]
+    try:
+        backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
+    except KeyError:
+        raise ValueError(f"invalid backend id {backend_id} in streaming header")
+    if backend == "huffman":
+        raise ValueError("huffman streaming frames are not decodable (no frequency table was stored); file was written by a pre-fix writer")
+    first=struct.unpack(">I", _sread(4, "block size / sentinel"))[0]
+    if first == STREAM_SENTINEL:
+        block_size=struct.unpack(">I", _sread(4, "block size"))[0]
+    else:
+        block_size=first  # legacy stream files (pre-sentinel): block size sits here
+    dict_len=struct.unpack(">I", _sread(4, "dict length"))[0]
+    dict_bytes=_sread(dict_len, "dict") if dict_len else None
     zstd_dict=zstd.ZstdCompressionDict(dict_bytes) if dict_bytes and has_zstd else None
+    nblocks_out = 0
     while True:
         hdr=in_stream.read(2)
-        if not hdr: break
-        if len(hdr)<2: break
+        if not hdr:
+            break  # clean EOF between frames: normal end of stream
+        if len(hdr)<2:
+            raise EOFError("truncated streaming .rissa file: 2B frame header cut short")
         tid, extra_len = hdr[0], hdr[1]
-        orig_len_bytes=in_stream.read(4)
-        if not orig_len_bytes: break
-        orig_len=struct.unpack(">I", orig_len_bytes)[0]
-        comp_len=struct.unpack(">I", in_stream.read(4))[0]
-        extra=in_stream.read(extra_len) if extra_len else b""
-        comp=in_stream.read(comp_len)
-        if not comp and comp_len!=0: break
+        if tid not in TRANSFORMS_V2:
+            raise ValueError(f"invalid transform id {tid} in stream at block {nblocks_out}")
+        orig_len=struct.unpack(">I", _sread(4, "frame orig length"))[0]
+        comp_len=struct.unpack(">I", _sread(4, "frame comp length"))[0]
+        extra=_sread(extra_len, "frame extra") if extra_len else b""
+        comp=_sread(comp_len, "frame payload")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
-        if backend=="huffman":
-            # huffman streaming not fully impl - fallback
-            pass
-        else:
-            if backend=="zlib": tr=zlib.decompress(comp)
-            elif backend=="lzma": tr=lzma.decompress(comp)
-            elif backend=="zstd":
-                dctx=zstd.ZstdDecompressor(dict_data=zstd_dict) if zstd_dict else zstd.ZstdDecompressor()
-                tr=dctx.decompress(comp)
-            out_stream.write(dec_fn(tr, extra)[:orig_len])
+        if backend=="zlib": tr=zlib.decompress(comp)
+        elif backend=="lzma": tr=lzma.decompress(comp)
+        elif backend=="zstd":
+            dctx=zstd.ZstdDecompressor(dict_data=zstd_dict) if zstd_dict else zstd.ZstdDecompressor()
+            tr=dctx.decompress(comp)
+        out_stream.write(dec_fn(tr, extra)[:orig_len])
+        nblocks_out += 1
 
 if __name__=="__main__":
     import io

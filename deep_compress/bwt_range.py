@@ -156,7 +156,10 @@ def mtf_decode_fast(data: bytes) -> bytes:
 
 def bwt_rle_mtf_range_encode(data: bytes):
     """Full pipeline: BWT -> RLE -> MTF -> Range Coder with adaptive bit contexts"""
-    from transforms_v2 import bwt_encode, mtf_encode
+    try:
+        from .transforms_v2 import bwt_encode, mtf_encode
+    except ImportError:
+        from deep_compress.transforms_v2 import bwt_encode, mtf_encode
     # 1. BWT
     bwt, primary = bwt_encode(data)
     if bwt is None:
@@ -169,7 +172,10 @@ def bwt_rle_mtf_range_encode(data: bytes):
     # For prototype, use simple byte-level Huffman as placeholder for range coder
     # Full range coder would be: for each bit of mtf, use context last 2 bits -> 4 contexts, prob 12-bit
     # Here we just use Huffman as approximation for speed
-    from huffman import huffman_encode_block
+    try:
+        from .huffman import huffman_encode_block
+    except ImportError:
+        from deep_compress.huffman import huffman_encode_block
     mtf_enc, freq, pad, _ = huffman_encode_block(mtf)
     # Also need to encode runs and primary
     extra = struct.pack(">H", primary) + struct.pack(">I", len(runs)) + runs
@@ -177,8 +183,14 @@ def bwt_rle_mtf_range_encode(data: bytes):
 
 def bwt_rle_mtf_range_decode(mtf_enc: bytes, extra: bytes, orig_len: int):
     """Inverse"""
-    from transforms_v2 import mtf_decode, bwt_decode_fast
-    from huffman import huffman_decode_block
+    try:
+        from .transforms_v2 import mtf_decode, bwt_decode_fast
+    except ImportError:
+        from deep_compress.transforms_v2 import mtf_decode, bwt_decode_fast
+    try:
+        from .huffman import huffman_decode_block
+    except ImportError:
+        from deep_compress.huffman import huffman_decode_block
     if len(extra) < 6:
         return None
     primary = struct.unpack(">H", extra[0:2])[0]
@@ -193,7 +205,10 @@ def bwt_rle_mtf_range_decode(mtf_enc: bytes, extra: bytes, orig_len: int):
 # For MDL testing, provide simple wrapper that uses BWT+RLE+MTF then lzma as fallback
 def bwt_rle_mtf_lzma_encode(data: bytes):
     """BWT+RLE+MTF then lzma - beats xz on text"""
-    from transforms_v2 import bwt_encode, mtf_encode, rle_zero_encode
+    try:
+        from .transforms_v2 import bwt_encode, mtf_encode, rle_zero_encode
+    except ImportError:
+        from deep_compress.transforms_v2 import bwt_encode, mtf_encode, rle_zero_encode
     import lzma
     bwt, primary = bwt_encode(data)
     if bwt is None:

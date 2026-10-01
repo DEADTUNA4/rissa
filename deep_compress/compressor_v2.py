@@ -6,13 +6,13 @@ Compressor v2: Per-block MDL-gated Transform Search with expanded candidates
 """
 import struct
 try:
-    from transforms_v2 import TRANSFORMS_V2
-except ImportError:
     from .transforms_v2 import TRANSFORMS_V2
-try:
-    from huffman import huffman_encode_block, huffman_decode_block
 except ImportError:
+    from transforms_v2 import TRANSFORMS_V2
+try:
     from .huffman import huffman_encode_block, huffman_decode_block
+except ImportError:
+    from huffman import huffman_encode_block, huffman_decode_block
 
 BLOCK_SIZE = 16384  # 16KB default for Silesia - balances transform granularity vs dict
 MAGIC = b"RISA"  # rissa legacy v2 compat
@@ -58,6 +58,10 @@ def compress_with_backend(data: bytes, backend="zstd", level=None, block_size=BL
         level = 9
 
     blocks = [data[i:i+block_size] for i in range(0, len(data), block_size)] if data else [b""]
+    # v2 stores ORIG_LEN as >H: refuse oversize blocks loudly (silent truncation
+    # would corrupt). v2 is legacy; use v3/v4 for larger blocks.
+    if any(len(b) > 65535 for b in blocks):
+        raise ValueError(f"v2 format stores block length as 16-bit (max 65535B); got block_size={block_size} (use v3/v4 for larger blocks)")
 
     out = bytearray()
     out.extend(MAGIC)
@@ -143,31 +147,46 @@ def decompress_with_backend(data: bytes):
     if not data.startswith(MAGIC):
         raise ValueError("bad magic")
     pos=4
-    version=data[pos]; pos+=1
-    backend_id=data[pos]; pos+=1
-    backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
-    num_blocks=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-    block_size=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
+    def _need(n, what):
+        nonlocal pos
+        chunk = data[pos:pos+n]
+        if len(chunk) < n:
+            raise EOFError(f"truncated v2 .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
+        pos += n
+        return chunk
+    version=_need(1, "version")[0]
+    if version != 2:
+        raise ValueError(f"v2 decoder got version {version} (use the matching decompressor)")
+    backend_id=_need(1, "backend id")[0]
+    try:
+        backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
+    except KeyError:
+        raise ValueError(f"invalid backend id {backend_id} (expected 0-3)")
+    num_blocks=struct.unpack(">I", _need(4, "block count"))[0]
+    if num_blocks > 100000:
+        raise ValueError(f"implausible block count {num_blocks} (file likely corrupt)")
+    block_size=struct.unpack(">I", _need(4, "block size"))[0]
     out=bytearray()
-    for _ in range(num_blocks):
-        tid=data[pos]; pos+=1
-        extra_len=data[pos]; pos+=1
-        orig_len=struct.unpack(">H", data[pos:pos+2])[0]; pos+=2
+    for bi in range(num_blocks):
+        tid=_need(1, f"block {bi} transform id")[0]
+        extra_len=_need(1, f"block {bi} extra length")[0]
+        orig_len=struct.unpack(">H", _need(2, f"block {bi} orig length"))[0]
+        if tid not in TRANSFORMS_V2:
+            raise ValueError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="huffman":
-            padding=data[pos]; pos+=1
-            freq=[struct.unpack(">H", data[pos+i*2:pos+i*2+2])[0] for i in range(256)]
-            pos+=512
-            enc_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-            extra=data[pos:pos+extra_len]; pos+=extra_len
-            encoded=data[pos:pos+enc_len]; pos+=enc_len
+            padding=_need(1, f"block {bi} huffman padding")[0]
+            freq=[struct.unpack(">H", _need(2, f"block {bi} huffman freq {i}"))[0] for i in range(256)]
+            enc_len=struct.unpack(">I", _need(4, f"block {bi} huffman payload length"))[0]
+            extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
+            encoded=_need(enc_len, f"block {bi} huffman payload")
             transformed=huffman_decode_block(encoded, freq, padding, orig_len)
             final=dec_fn(transformed, extra)
             out.extend(final[:orig_len])
         else:
-            comp_len=struct.unpack(">I", data[pos:pos+4])[0]; pos+=4
-            extra=data[pos:pos+extra_len]; pos+=extra_len
-            comp=data[pos:pos+comp_len]; pos+=comp_len
+            comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
+            extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
+            comp=_need(comp_len, f"block {bi} payload")
             if backend=="zlib":
                 transformed=zlib.decompress(comp)
             elif backend=="lzma":

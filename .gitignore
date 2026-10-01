@@ -5,6 +5,7 @@ __pycache__/
 *.rissa
 *.rissa.tmp
 bench*.jsonl
+*.fits
 silesia/
 silesia.zip
 deep_compress/silesia/
@@ -35,3 +36,15 @@ Thumbs.db
 rissa/*.pyd
 rissa/*.so
 rissa/*.dll
+
+# Local-only AI handoff (never commit) - case variants for safety
+AGENT.md
+agent.md
+
+# Native GUI build output (source in gui_native/ stays tracked)
+gui_native/*.exe
+gui_native/*.log
+gui_native/*.o
+# Tool run logs (LocalAppData in production; repo-local fallback in dev)
+logs/
+*.log

@@ -6,7 +6,10 @@ CLI: rissa input.bin -o output.rissa  |  rissa -d input.rissa -o output.bin
 import argparse, sys, pathlib, os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from compressor_v3 import compress_with_dict, decompress_with_dict, BLOCK_SIZE_64K, BLOCK_SIZE_128K, MAGIC
+try:
+    from .compressor_v3 import compress_with_dict, decompress_with_dict, BLOCK_SIZE_64K, BLOCK_SIZE_128K, MAGIC
+except ImportError:
+    from deep_compress.compressor_v3 import compress_with_dict, decompress_with_dict, BLOCK_SIZE_64K, BLOCK_SIZE_128K, MAGIC
 
 def main():
     p=argparse.ArgumentParser(prog="rissa", description="rissa - Adaptive MDL Compressor (Rissanen 1978) - https://rissa.web.app")
@@ -35,7 +38,10 @@ def main():
             import io
             bio_in=io.BytesIO(data)
             bio_out=io.BytesIO()
-            from compressor_v3 import compress_stream
+            try:
+                from .compressor_v3 import compress_stream
+            except ImportError:
+                from deep_compress.compressor_v3 import compress_stream
             compress_stream(bio_in, bio_out, backend=args.backend, level=args.level, block_size=args.block, use_dict=args.dict)
             out=bio_out.getvalue()
         else:

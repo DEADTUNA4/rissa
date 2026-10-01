@@ -17,6 +17,10 @@ try:
     import rissa.c_delta
     HAS_C_DELTA=True
 except: HAS_C_DELTA=False
+try:
+    import rissa.c_trans
+    HAS_C_TRANS=True
+except: HAS_C_TRANS=False
 
 def delta_encode(data: bytes) -> bytes:
     if HAS_C_DELTA:
@@ -44,6 +48,9 @@ def delta_decode(data: bytes) -> bytes:
 
 def delta2_encode(data: bytes) -> bytes:
     """Double delta - good for linear ramps / sensor data"""
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.delta2(data)
+        except: pass
     if len(data) < 2:
         return data
     # first delta, then delta again
@@ -57,6 +64,9 @@ def delta2_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def delta2_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.delta2_decode(data)
+        except: pass
     if len(data) < 2:
         return data
     # inverse: first recover d1, then recover original
@@ -68,6 +78,9 @@ def delta2_decode(data: bytes) -> bytes:
     return delta_decode(bytes(d1))
 
 def xor_encode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.xor_enc(data)
+        except: pass
     if not data:
         return b""
     out = bytearray(len(data))
@@ -77,6 +90,9 @@ def xor_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def xor_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.xor_dec(data)
+        except: pass
     if not data:
         return b""
     out = bytearray(len(data))
@@ -86,6 +102,9 @@ def xor_decode(data: bytes) -> bytes:
     return bytes(out)
 
 def bwt_encode(data: bytes):
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.bwt_encode(data)
+        except: pass
     n = len(data)
     if n==0:
         return b"", 0
@@ -139,7 +158,12 @@ def bwt_encode(data: bytes):
     return bwt, primary
 
 def bwt_decode_fast(bwt: bytes, primary: int) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.bwt_decode(bwt, primary)
+        except: pass
     n = len(bwt)
+    if n and not (0 <= primary < n):
+        raise ValueError(f"BWT primary {primary} out of range for length {n}")
     if n==0:
         return b""
     counts = [0]*256
@@ -164,6 +188,9 @@ def bwt_decode_fast(bwt: bytes, primary: int) -> bytes:
     return bytes(res)
 
 def mtf_encode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.mtf(data)
+        except: pass
     alphabet = list(range(256))
     out = bytearray()
     for c in data:
@@ -174,6 +201,9 @@ def mtf_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def mtf_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.mtf_decode(data)
+        except: pass
     alphabet = list(range(256))
     out = bytearray()
     for idx in data:
@@ -195,6 +225,9 @@ def shuffle_encode(data: bytes, stride: int) -> bytes:
     if HAS_C_SHUFFLE and stride==4:
         try: return rissa.c_shuffle.shuffle(data, stride)
         except: pass
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.shuffle(data, stride)
+        except: pass
     n = len(data)
     if n < stride*2:
         return data
@@ -213,6 +246,9 @@ def shuffle_encode(data: bytes, stride: int) -> bytes:
     return bytes(out)
 
 def shuffle_decode(data: bytes, stride: int) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.shuffle_decode(data, stride)
+        except: pass
     n = len(data)
     if n < stride*2:
         return data
@@ -287,6 +323,9 @@ def zigzag_decode(data: bytes) -> bytes:
     return bytes(out)
 
 def delta2_zigzag_encode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.d2zz(data)
+        except: pass
     if len(data) < 2:
         return data
     d1 = delta_encode(data)
@@ -301,6 +340,9 @@ def delta2_zigzag_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def delta2_zigzag_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.d2zz_decode(data)
+        except: pass
     if len(data)<2:
         return data
     d1 = bytearray(len(data))
@@ -315,6 +357,9 @@ def delta2_zigzag_decode(data: bytes) -> bytes:
 
 def order2_encode(data: bytes) -> bytes:
     """Second-order predictor: predict x[n] = 2*x[n-1] - x[n-2]. Good for text-like."""
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.order2(data)
+        except: pass
     if len(data)<2:
         return data
     out=bytearray(len(data))
@@ -326,6 +371,9 @@ def order2_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def order2_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.order2_decode(data)
+        except: pass
     if len(data)<2:
         return data
     out=bytearray(len(data))
@@ -338,6 +386,9 @@ def order2_decode(data: bytes) -> bytes:
 
 def rle_zero_encode(data: bytes) -> bytes:
     """RLE of zeros after MTF: 4-zero marker, unambiguous. Encodes runs >=4 as [0,0,0,0, N-4]"""
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.rle_zero(data)
+        except: pass
     if not data:
         return b""
     out=bytearray()
@@ -361,6 +412,9 @@ def rle_zero_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def rle_zero_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.rle_zero_decode(data)
+        except: pass
     out=bytearray()
     i=0
     n=len(data)
@@ -376,6 +430,9 @@ def rle_zero_decode(data: bytes) -> bytes:
     return bytes(out)
 
 def rle_encode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.rle(data)
+        except: pass
     import struct
     from itertools import groupby
     out = bytearray()
@@ -388,6 +445,9 @@ def rle_encode(data: bytes) -> bytes:
     return bytes(out)
 
 def rle_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.rle_decode(data)
+        except: pass
     import struct
     out = bytearray()
     for i in range(0, len(data) - len(data) % 3, 3):
@@ -396,6 +456,9 @@ def rle_decode(data: bytes) -> bytes:
 
 def float_split_encode(data: bytes) -> bytes:
     """Float-aware: split IEEE754 32-bit floats into 4 streams. cf. Gorilla. Only if len%4==0 and looks like floats"""
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.float_split(data)
+        except: pass
     if len(data)<8 or len(data)%4!=0:
         return data
     # Heuristic: check if data could be floats (exponent not all zero/255)
@@ -410,6 +473,9 @@ def float_split_encode(data: bytes) -> bytes:
     return bytes().join(streams)
 
 def float_split_decode(data: bytes) -> bytes:
+    if HAS_C_TRANS:
+        try: return rissa.c_trans.float_split_decode(data)
+        except: pass
     if len(data)<8 or len(data)%4!=0:
         return data
     n=len(data)//4
@@ -474,7 +540,10 @@ def shuffle_delta_decode(data: bytes, stride=4) -> bytes:
     return shuffle_decode(d, stride)
 
 def dict_substitute_encode(data: bytes, dict_bytes: bytes = None) -> tuple:
-    """DICT_SUBSTITUTE: replace frequent 8-byte patterns with 2-byte indices (static LZ pre-processor)"""
+    """DICT_RESERVED (TID 17): identity stub. A real static-LZ substitution was
+    prototyped and rejected (dict overhead never paid on tested corpora); the
+    TID stays registered so old files decode, but it is intentionally never
+    better than RAW and must not be presented as a working transform."""
     if len(data) < 1024 or not dict_bytes:
         return data, b""
     out = bytearray(data)
@@ -595,6 +664,12 @@ def _bwt_mtf_rle_decode(data: bytes, extra: bytes):
     bwt = mtf_decode(mtf)
     return bwt_decode_fast(bwt, primary)
 
+# Raw-chunk marker for BWT_SUBBLOCK extras. Must be unusable as a real primary:
+# primaries are < sub_size (<=256K), so 0xFFFFFFFF can never collide.
+# (The original >H 0xFFFF marker DID collide with primary 65535 AND desynced
+# the mixed 2/4B entry stream — see CHANGELOG. Old files keep a legacy path.)
+SUBBLOCK_RAW = 0xFFFFFFFF
+
 def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
     """Sub-block BWT stopgap for large blocks: split 1M -> 4x256K, BWT+MTF each, concat. Captures local redundancy."""
     if len(data) <= sub_size:
@@ -609,9 +684,9 @@ def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
         chunk = data[i:i+sub_size]
         bwt, primary = bwt_encode(chunk)
         if bwt is None:
-            # fallback: raw chunk
+            # fallback: raw chunk (only when a chunk exceeds the BWT cap)
             out.extend(chunk)
-            extra.extend(struct.pack(">H", 0xFFFF))  # marker for raw
+            extra.extend(struct.pack(">I", SUBBLOCK_RAW))
         else:
             mtf = mtf_encode(bwt)
             out.extend(mtf)
@@ -619,36 +694,59 @@ def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
     return bytes(out), bytes(extra)
 
 def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
-    # Handle both old H (4+2*num) and new I (8+4*num) for compat
-    if len(extra) >= 8 and struct.unpack(">I", extra[4:8])[0] < 1000: # new I format has num at 4:8
-        pass
-    elif len(extra) < 4:
-        return _bwt_mtf_decode(data, extra)
+    # Single-chunk form (len <= sub_size at encode time): plain BWT_MTF extra.
     if len(extra) < 8:
         return _bwt_mtf_decode(data, extra)
     sub_size = struct.unpack(">I", extra[0:4])[0]
     num = struct.unpack(">I", extra[4:8])[0]
-    if sub_size == 0 or num == 0:
-        return _bwt_mtf_decode(data, extra)
+    if sub_size == 0 or num == 0 or num > 4096 or sub_size > 16 * 1024 * 1024:
+        raise ValueError(f"invalid BWT_SUBBLOCK header: sub_size={sub_size} num={num}")
     out = bytearray()
     pos = 0
-    epos = 8
-    for _ in range(num):
-        if epos+2 > len(extra):
-            break
-        primary = struct.unpack(">I", extra[epos:epos+4])[0]
-        epos+=4
-        if primary == 0xFFFF:
-            # raw chunk
-            chunk_len = min(sub_size, len(data)-pos)
-            out.extend(data[pos:pos+chunk_len])
-            pos+=chunk_len
-        else:
-            chunk_len = min(sub_size, len(data)-pos)
-            mtf = data[pos:pos+chunk_len]
-            pos+=chunk_len
-            bwt = mtf_decode(mtf)
-            out.extend(bwt_decode_fast(bwt, primary))
+    if len(extra) == 8 + 4 * num:
+        # Current layout: fixed 4B entries (0xFFFFFFFF = raw chunk).
+        epos = 8
+        for k in range(num):
+            if epos + 4 > len(extra):
+                raise EOFError(f"truncated BWT_SUBBLOCK extra at chunk {k}/{num}")
+            primary = struct.unpack(">I", extra[epos:epos + 4])[0]
+            epos += 4
+            chunk_len = min(sub_size, len(data) - pos)
+            if chunk_len < 0:
+                raise EOFError("BWT_SUBBLOCK payload shorter than header claims")
+            if primary == SUBBLOCK_RAW:
+                out.extend(data[pos:pos + chunk_len])
+                pos += chunk_len
+            else:
+                if primary >= sub_size:
+                    raise ValueError(f"BWT_SUBBLOCK primary {primary} out of range for sub_size {sub_size}")
+                mtf = data[pos:pos + chunk_len]
+                pos += chunk_len
+                bwt = mtf_decode(mtf)
+                out.extend(bwt_decode_fast(bwt, primary))
+        return bytes(out)
+    # Legacy mixed 2/4B layout (pre-fix writers): best effort, byte-identical to
+    # the old decoder. The old 0xFFFF marker semantics are preserved here, bugs
+    # included — only NEW files get the collision-free layout. Raises on damage.
+    try:
+        epos = 8
+        for _ in range(num):
+            if epos + 4 > len(extra):
+                raise EOFError("truncated legacy BWT_SUBBLOCK extra")
+            primary = struct.unpack(">I", extra[epos:epos + 4])[0]
+            epos += 4
+            if primary == 0xFFFF:
+                chunk_len = min(sub_size, len(data) - pos)
+                out.extend(data[pos:pos + chunk_len])
+                pos += chunk_len
+            else:
+                chunk_len = min(sub_size, len(data) - pos)
+                mtf = data[pos:pos + chunk_len]
+                pos += chunk_len
+                bwt = mtf_decode(mtf)
+                out.extend(bwt_decode_fast(bwt, primary))
+    except (struct.error, IndexError, EOFError) as e:
+        raise ValueError(f"undecodable legacy BWT_SUBBLOCK extra: {e}")
     return bytes(out)
 
 # Expanded registry - per-block MDL will gate these (cost of extra counted)
@@ -670,7 +768,7 @@ TRANSFORMS_V2 = {
     14:("BIT_TRANSPOSE", lambda x: (bit_transpose_encode(x), b""),    lambda x, e: bit_transpose_decode(x)),
     15:("SHUFFLE4_DELTA",lambda x: (shuffle_delta_encode(x,4), b"\x04"), lambda x, e: shuffle_delta_decode(x,4)),
     16:("BWT_SUBBLOCK",  lambda x: bwt_subblock_encode(x),            lambda x, e: bwt_subblock_decode(x, e)),
-    17:("DICT_SUBSTITUTE", lambda x: dict_substitute_encode(x),       lambda x, e: x),  # stub, returns raw
+    17:("DICT_RESERVED", lambda x: dict_substitute_encode(x),       lambda x, e: x),  # TID frozen: identity stub, never promoted (see dict_substitute_encode)
     19:("RLE",             lambda x: (rle_encode(x), b""),              lambda x, e: rle_decode(x)),
 }
 

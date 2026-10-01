@@ -32,6 +32,21 @@ extensions = [
         sources=['rissa/c_delta.c'],
         extra_compile_args=compile_args,
     ),
+    Extension(
+        'rissa.c_trans',
+        sources=['rissa/c_trans.c'],
+        extra_compile_args=compile_args,
+    ),
+    Extension(
+        'rissa.c_huff',
+        sources=['rissa/c_huff.c'],
+        extra_compile_args=compile_args,
+    ),
+    Extension(
+        'rissa.c_stat',
+        sources=['rissa/c_stat.c'],
+        extra_compile_args=compile_args,
+    ),
 ]
 
 setup(ext_modules=extensions)
