@@ -2,6 +2,15 @@
 
 **https://rissa.web.app - Apache 2.0 - `rissa-compress`**
 
+## v4.6.4 - 2026-10-01 - library polish I, logo, no-em-dash policy
+
+Library polish, not a rewrite (per review: the expensive part is backend search, not the transforms). **No benchmark changes by design - same bytes, same tables.**
+- New `deep_compress/errors.py` (`RissaError`/`TruncatedError`/`FormatError`, builtin-compatible) + `deep_compress/types.py` (`Backend` Literal, `BlockResult` dataclass); decoders wired over.
+- `DEVELOPER.md` rewritten as Architecture and API Reference (public API / pipeline / 19-transform table / container / backends / Python API / internals); three-layer story (public API writes stable v3, v4 opt-in, internals underneath).
+- `FORMAT.md` + `public/spec.html` synced to format v4 wording; `DOCUMENTATION.md` fixed (19 transforms, dead rans.py refs); `GUIDE.md` carries the layer framing.
+- Repo-wide no-em-dash policy (542 replacements, 47 files, verified zero).
+- New logo (`public/logo.png` + favicons): three overlapping lenses - story on https://rissa.web.app/#mark.
+
 ## v4.6.3 - 2026-10-01 - v4.6.2 checklist: dead pool, strict errors, v4 unification, portable builds, screening evidence, rigorous bench
 
 0. **Dead ProcessPoolExecutor removed (v4):** the parallel branch spawned a process pool then ran everything in a nested ThreadPool - the processes sat idle while adding Windows spawn + memory overhead. ThreadPool-only now.

@@ -1,6 +1,6 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>rissa - Context-Selecting Compression</title><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="rissa pays homage to Jorma Rissanen MDL 1978 - adaptive compression for structured, sensor, columnar data"><link rel="stylesheet" href="/style.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="/favicon.ico"><title>rissa - Context-Selecting Compression</title><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="rissa pays homage to Jorma Rissanen MDL 1978 - adaptive compression for structured, sensor, columnar data"><link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"><script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script></head><body>
-<nav><div class="nav-inner"><a href="/" class="brand active">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
+<nav><div class="nav-inner"><a href="/" class="brand active"><img src="/logo.png" alt="rissa logo" style="height:22px;vertical-align:-4px"> rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
 <header class="hero">
   <div style="max-width:980px;margin:0 auto;padding:0 20px">
   <h1>rissa <span>pays homage to Jorma Rissanen - MDL 1978</span></h1>
@@ -28,6 +28,15 @@ assert rissa.decompress(compressed) == data</code></pre></div>
     <div><h3>CLI</h3><pre><code class="language-bash">rissa input.bin -o output.rissa --block 131072 --dict
 rissa -d output.rissa -o restored.bin</code></pre><p class="mut"><code>pip install rissa-compress</code> - <code>python -m deep_compress.rissa</code></p></div>
   </div>
+</section>
+<section id="mark">
+<h2>The mark</h2>
+<div class="grid">
+<div><img src="/logo.png" alt="rissa logo - three overlapping lenses" style="width:100%;max-width:280px;border-radius:10px"></div>
+<div><h3>Three lenses, one decision</h3>
+<p>Three overlapping lenses for the three layers the project finally named honestly: the <strong>public API</strong> you import, the <strong>containers</strong> that carry the bytes, the <strong>internals</strong> underneath. Distinct, overlapping, one mark.</p>
+<p>The overlaps are where the work happens - each block is tried through every lens and the shortest description wins (<code>min_T</code>). Pale yellow on black is signal out of noise: low entropy against the Shannon dark. And everything is round, because lossless means what goes in comes back out.</p></div>
+</div>
 </section>
 <footer>
   <p><strong>Apache 2.0</strong> - See <a href="https://github.com/DEADTUNA4/rissa/blob/main/LICENSE">LICENSE</a> - <a href="https://github.com/DEADTUNA4/rissa">GitHub</a> - <a href="/docs.html">Docs</a></p>
