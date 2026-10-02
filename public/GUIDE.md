@@ -1,6 +1,6 @@
-# Guide — How to use rissa
+# Guide - How to use rissa
 
-**https://rissa.web.app — v4.4 — `pip install rissa-compress`**
+**https://rissa.web.app - v4.4 - `pip install rissa-compress`**
 
 ## How to use
 
@@ -60,7 +60,7 @@ python -c "from deep_compress.compressor_v3 import compress_stream, decompress_s
 | >50MB arch | `4M` + `use_two_pass=True` | Larger window (64M dict) helps, sub-block BWT still 256K |
 | Small <1KB | any | Header dominates, rissa falls back to RAW |
 
-`header 512B at 16K =3% → 0.4% at 128K → 0.05% at 1M` — v4 adaptive does `<=4M → single` automatically.
+`header 512B at 16K =3% → 0.4% at 128K → 0.05% at 1M` - v4 adaptive does `<=4M → single` automatically.
 
 ## Streaming
 
@@ -72,7 +72,7 @@ with open('big.rissa','rb') as fin, open('big.out','wb') as fout:
     decompress_stream(fin, fout)
 ```
 
-`for block in stream` without whole-file RAM. `xor_prev_block` disabled in parallel/streaming (loud check in `compressor_v4.py`) — use sequential for that transform.
+`for block in stream` without whole-file RAM. `xor_prev_block` disabled in parallel/streaming (loud check in `compressor_v4.py`) - use sequential for that transform.
 
 ## Python API details
 

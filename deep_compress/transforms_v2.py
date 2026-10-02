@@ -7,6 +7,10 @@ try:
     from .diag import note
 except ImportError:
     from diag import note
+try:
+    from .errors import FormatError, TruncatedError
+except ImportError:
+    from errors import FormatError, TruncatedError
 
 # Try pure C hot paths (141x SHUFFLE, 308x BIT, 111x DELTA) via w64devkit GCC 16.2, fallback to Python
 try:
@@ -167,7 +171,7 @@ def bwt_decode_fast(bwt: bytes, primary: int) -> bytes:
         except Exception as _e: note("bwt_decode_fast", _e)
     n = len(bwt)
     if n and not (0 <= primary < n):
-        raise ValueError(f"BWT primary {primary} out of range for length {n}")
+        raise FormatError(f"BWT primary {primary} out of range for length {n}")
     if n==0:
         return b""
     counts = [0]*256
@@ -555,7 +559,7 @@ def dict_substitute_encode(data: bytes, dict_bytes: bytes = None) -> tuple:
 
 _racd_store = {}  # global for prototype roundtrip: transposed -> original
 def racd_encode(data: bytes) -> tuple:
-    """RACD: Record-Aligned Column Dictionary — field-level transpose, length-prefix, per-column"""
+    """RACD: Record-Aligned Column Dictionary - field-level transpose, length-prefix, per-column"""
     if len(data) < 1024 or b'\n' not in data:
         return data, b""
     import re, struct
@@ -616,13 +620,13 @@ def racd_encode(data: bytes) -> tuple:
             extra += struct.pack(">H", len(col)) + struct.pack(">H", idx)
         parts.append(col)
     transposed = b'\n'.join(parts) if parts else data
-    # Let MDL decide based on compressed size, not raw size — even if transposed raw is larger, lzma may still win
+    # Let MDL decide based on compressed size, not raw size - even if transposed raw is larger, lzma may still win
     _racd_store[transposed[:64]] = data
     _racd_store[id(transposed)] = data
     return transposed, extra
 
 def racd_decode(data: bytes, extra: bytes) -> bytes:
-    """Inverse RACD — prototype uses stored original for roundtrip"""
+    """Inverse RACD - prototype uses stored original for roundtrip"""
     if not extra or len(extra) < 2:
         return data
     # Try to find original via store (for test)
@@ -634,7 +638,7 @@ def racd_decode(data: bytes, extra: bytes) -> bytes:
     # For file-scale test, we need proper decode, but for now just return data as is
     # To make roundtrip pass for full file, we need to handle the case where transposed is from file-scale 33M
     # For that, the transposed data is large and not in store, so we need to handle it
-    # For now, if we can't find in store, just return data (which is transposed, not original) — will fail roundtrip but for test we can make it pass by storing
+    # For now, if we can't find in store, just return data (which is transposed, not original) - will fail roundtrip but for test we can make it pass by storing
     # Instead, we will make racd_decode just return the stored original if available, else try to reverse
     # For this prototype, we will make it so that encode stores the original length and we can verify roundtrip via direct lzma on transposed
     # For the pipeline test, we will bypass the transform's decode and just use the stored original
@@ -671,7 +675,7 @@ def _bwt_mtf_rle_decode(data: bytes, extra: bytes):
 # Raw-chunk marker for BWT_SUBBLOCK extras. Must be unusable as a real primary:
 # primaries are < sub_size (<=256K), so 0xFFFFFFFF can never collide.
 # (The original >H 0xFFFF marker DID collide with primary 65535 AND desynced
-# the mixed 2/4B entry stream — see CHANGELOG. Old files keep a legacy path.)
+# the mixed 2/4B entry stream - see CHANGELOG. Old files keep a legacy path.)
 SUBBLOCK_RAW = 0xFFFFFFFF
 
 def bwt_subblock_encode(data: bytes, sub_size=256*1024) -> tuple:
@@ -704,7 +708,7 @@ def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
     sub_size = struct.unpack(">I", extra[0:4])[0]
     num = struct.unpack(">I", extra[4:8])[0]
     if sub_size == 0 or num == 0 or num > 4096 or sub_size > 16 * 1024 * 1024:
-        raise ValueError(f"invalid BWT_SUBBLOCK header: sub_size={sub_size} num={num}")
+        raise FormatError(f"invalid BWT_SUBBLOCK header: sub_size={sub_size} num={num}")
     out = bytearray()
     pos = 0
     if len(extra) == 8 + 4 * num:
@@ -712,18 +716,18 @@ def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
         epos = 8
         for k in range(num):
             if epos + 4 > len(extra):
-                raise EOFError(f"truncated BWT_SUBBLOCK extra at chunk {k}/{num}")
+                raise TruncatedError(f"truncated BWT_SUBBLOCK extra at chunk {k}/{num}")
             primary = struct.unpack(">I", extra[epos:epos + 4])[0]
             epos += 4
             chunk_len = min(sub_size, len(data) - pos)
             if chunk_len < 0:
-                raise EOFError("BWT_SUBBLOCK payload shorter than header claims")
+                raise TruncatedError("BWT_SUBBLOCK payload shorter than header claims")
             if primary == SUBBLOCK_RAW:
                 out.extend(data[pos:pos + chunk_len])
                 pos += chunk_len
             else:
                 if primary >= sub_size:
-                    raise ValueError(f"BWT_SUBBLOCK primary {primary} out of range for sub_size {sub_size}")
+                    raise FormatError(f"BWT_SUBBLOCK primary {primary} out of range for sub_size {sub_size}")
                 mtf = data[pos:pos + chunk_len]
                 pos += chunk_len
                 bwt = mtf_decode(mtf)
@@ -731,12 +735,12 @@ def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
         return bytes(out)
     # Legacy mixed 2/4B layout (pre-fix writers): best effort, byte-identical to
     # the old decoder. The old 0xFFFF marker semantics are preserved here, bugs
-    # included — only NEW files get the collision-free layout. Raises on damage.
+    # included - only NEW files get the collision-free layout. Raises on damage.
     try:
         epos = 8
         for _ in range(num):
             if epos + 4 > len(extra):
-                raise EOFError("truncated legacy BWT_SUBBLOCK extra")
+                raise TruncatedError("truncated legacy BWT_SUBBLOCK extra")
             primary = struct.unpack(">I", extra[epos:epos + 4])[0]
             epos += 4
             if primary == 0xFFFF:
@@ -750,7 +754,7 @@ def bwt_subblock_decode(data: bytes, extra: bytes) -> bytes:
                 bwt = mtf_decode(mtf)
                 out.extend(bwt_decode_fast(bwt, primary))
     except (struct.error, IndexError, EOFError) as e:
-        raise ValueError(f"undecodable legacy BWT_SUBBLOCK extra: {e}")
+        raise FormatError(f"undecodable legacy BWT_SUBBLOCK extra: {e}")
     return bytes(out)
 
 # Expanded registry - per-block MDL will gate these (cost of extra counted)

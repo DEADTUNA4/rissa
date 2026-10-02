@@ -1,19 +1,19 @@
-# Changelog — rissa
+# Changelog - rissa
 
-**https://rissa.web.app — Apache 2.0 — `rissa-compress`**
+**https://rissa.web.app - Apache 2.0 - `rissa-compress`**
 
-## v4.6.3 — 2026-10-01 — v4.6.2 checklist: dead pool, strict errors, v4 unification, portable builds, screening evidence, rigorous bench
+## v4.6.3 - 2026-10-01 - v4.6.2 checklist: dead pool, strict errors, v4 unification, portable builds, screening evidence, rigorous bench
 
-0. **Dead ProcessPoolExecutor removed (v4):** the parallel branch spawned a process pool then ran everything in a nested ThreadPool — the processes sat idle while adding Windows spawn + memory overhead. ThreadPool-only now.
+0. **Dead ProcessPoolExecutor removed (v4):** the parallel branch spawned a process pool then ran everything in a nested ThreadPool - the processes sat idle while adding Windows spawn + memory overhead. ThreadPool-only now.
 1. **Targeted exceptions + `RISSA_STRICT`:** 0 bare `except:` remain in compressor/transform code (was 21). Skipped candidates are logged via `deep_compress/diag.py`; `RISSA_STRICT=1` re-raises immediately (verified: real error re-raised, clean pipeline silent).
-2. **v4 serial/parallel unified:** one `_eval_block_v4` + one `_write_block_v4` (mirrors v3's `_eval_block_v3`). Parallel adopts the serial policy (xz-matched presets, BIT_PLANE test) — FITS lzma 3,248,244 → 3,245,375 (−2.9KB, intended convergence); all serial reference SHAs byte-identical. Dead per-block `cache`, `shannon`, and order-1 no-op probe removed.
+2. **v4 serial/parallel unified:** one `_eval_block_v4` + one `_write_block_v4` (mirrors v3's `_eval_block_v3`). Parallel adopts the serial policy (xz-matched presets, BIT_PLANE test) - FITS lzma 3,248,244 → 3,245,375 (−2.9KB, intended convergence); all serial reference SHAs byte-identical. Dead per-block `cache`, `shannon`, and order-1 no-op probe removed.
 3. **Portable builds:** default `-O3` (no AVX2); `RISSA_NATIVE=1` opts into `-mavx2 -march=native`. Both paths verified compiling. README documents the split (never ship AVX2 wheels).
 4. **Metadata validation:** v3/v4 writers refuse `extra > 255B` loudly (v2/stream already fail via `append`); malformed-stream hardening from the audit batch stands.
 5. **Randomized C-vs-Python suite** (`deep_compress/test_c_equivalence.py`, in-repo): all transforms over randomized inputs + boundaries (258/259/260 zero-runs, 65535/65536 runs, stride edges, BWT periodics, bad primaries/padding → same `ValueError` both modes). Green.
-6. **Screening measured, then fixed:** 56-block panel showed top-3/zlib-1 missing the true best 4/56 (xml). Screen upgraded to same-family zstd-1 + top-4 (misses 2/56, xml-only, documented). Re-verified byte-identical fast==exhaustive on 4 corpora at 2.6–4× speedup.
-7. **Rigorous bench** (`deep_compress/bench_463.py --reps`): median/stdev, peak RSS (ctypes, fixed handle-truncation bug), CPU%, per-run xz baselines (machine drift observed at 3.5× between sessions — ratios only vs same-run baselines), determinism assert, JSONL. Split: transforms 1.7–2.7% of wall, backends 97%+. Peak RSS 134–154MB whole-file; CPU ~85% single-block, ~350% file-level parallel.
-   Measured (3 reps, med ± stdev s): columnar 14.22±0.24, fits-4M fast 5.48±0.34, sensor 7.25±0.55, dickens 26.19±1.58, nci 25.72±0.47, x-ray 21.01±0.13, xml 19.03±2.70; decomp 0.02–0.08s throughout. Sizes identical to v4.6.1/v4.6.2 everywhere (determinism asserted per rep).
-- **Considered and declined:** GIL release in C loops (transforms <2% of wall — no measurable gain; recorded), MTF Fenwick / SA-IS / order-1 / GPU (unchanged reasons).
+6. **Screening measured, then fixed:** 56-block panel showed top-3/zlib-1 missing the true best 4/56 (xml). Screen upgraded to same-family zstd-1 + top-4 (misses 2/56, xml-only, documented). Re-verified byte-identical fast==exhaustive on 4 corpora at 2.6-4× speedup.
+7. **Rigorous bench** (`deep_compress/bench_463.py --reps`): median/stdev, peak RSS (ctypes, fixed handle-truncation bug), CPU%, per-run xz baselines (machine drift observed at 3.5× between sessions - ratios only vs same-run baselines), determinism assert, JSONL. Split: transforms 1.7-2.7% of wall, backends 97%+. Peak RSS 134-154MB whole-file; CPU ~85% single-block, ~350% file-level parallel.
+   Measured (3 reps, med ± stdev s): columnar 14.22±0.24, fits-4M fast 5.48±0.34, sensor 7.25±0.55, dickens 26.19±1.58, nci 25.72±0.47, x-ray 21.01±0.13, xml 19.03±2.70; decomp 0.02-0.08s throughout. Sizes identical to v4.6.1/v4.6.2 everywhere (determinism asserted per rep).
+- **Considered and declined:** GIL release in C loops (transforms <2% of wall - no measurable gain; recorded), MTF Fenwick / SA-IS / order-1 / GPU (unchanged reasons).
 
 All 10 findings verified in code, all fixed, all regression-tested (`test_audit_regressions` in `test_roundtrip.py`; suite banner now distinguishes PASS / KNOWN-FAILURE / UNEXPECTED for CI).
 
@@ -29,39 +29,39 @@ All 10 findings verified in code, all fixed, all regression-tested (`test_audit_
 
 **YELLOW (honesty):** v2 refuses blocks >65535B loudly (16-bit `ORIG_LEN`); TID 17 renamed `DICT_RESERVED` identity stub (int frozen for old files); suite banner reports the known-failure state. FORMAT.md documents sentinel, subblock layout, huffman scaling, and error behavior.
 
-**Added:** `rissa/c_trans.c` (`setup.py` + `rissa-tool.spec` hiddenimports) — C ports of the remaining slow Python transforms, wired into `transforms_v2.py` behind `HAS_C_TRANS` with Python fallback: generic-stride `shuffle` + `shuffle_decode` (had no C path), `float_split`, `delta2`, `xor`, `order2`, `d2zz`, `mtf`, `rle`, `rle_zero` + all decodes. Verified bit-identical vs Python on 12 adversarial cases (empty/1B/odd lengths/zero-runs >259/runs >65535/FITS block) + C-only roundtrips; `test_roundtrip.py` ALL PASSED; `doctor` reports `HAS_C_TRANS`.
+**Added:** `rissa/c_trans.c` (`setup.py` + `rissa-tool.spec` hiddenimports) - C ports of the remaining slow Python transforms, wired into `transforms_v2.py` behind `HAS_C_TRANS` with Python fallback: generic-stride `shuffle` + `shuffle_decode` (had no C path), `float_split`, `delta2`, `xor`, `order2`, `d2zz`, `mtf`, `rle`, `rle_zero` + all decodes. Verified bit-identical vs Python on 12 adversarial cases (empty/1B/odd lengths/zero-runs >259/runs >65535/FITS block) + C-only roundtrips; `test_roundtrip.py` ALL PASSED; `doctor` reports `HAS_C_TRANS`.
 
-**Measured** (1M FITS block, i7-8750H): shuffle_2 71×, shuffle_8 66×, shuffle_decode 29×, delta2 113×, xor 109×, order2 132×, d2zz 63×, float_split 131×, rle 78×, mtf ~9× (O(256) pos-update remains — Fenwick is batch-2). Transform stage ≈3.0s → ≈0.16s per 1M (~19×). File-level wall clock is backend-dominated (zstd-19/lzma) + machine-noisy, so full-file time moves little — quality byte-identical (FITS re-run: same 3,286,048, SHUFFLE_4 ×65, roundtrip OK).
+**Measured** (1M FITS block, i7-8750H): shuffle_2 71×, shuffle_8 66×, shuffle_decode 29×, delta2 113×, xor 109×, order2 132×, d2zz 63×, float_split 131×, rle 78×, mtf ~9× (O(256) pos-update remains - Fenwick is batch-2). Transform stage ≈3.0s → ≈0.16s per 1M (~19×). File-level wall clock is backend-dominated (zstd-19/lzma) + machine-noisy, so full-file time moves little - quality byte-identical (FITS re-run: same 3,286,048, SHUFFLE_4 ×65, roundtrip OK).
 
-**Remaining Python (deliberate):** order-1 Huffman, range-coder scaffold, GPU shuffle, MTF Fenwick, second CDC pass — dead/experimental paths where C buys nothing (see Port policy).
+**Remaining Python (deliberate):** order-1 Huffman, range-coder scaffold, GPU shuffle, MTF Fenwick, second CDC pass - dead/experimental paths where C buys nothing (see Port policy).
 
-**Added (batch-2):** `rissa/c_huff.c` (Huffman MSB-first pack/unpack, tree stays Python — zero divergence risk) + `rissa/c_stat.c` (one-pass hist_entropy, rank_ngrams with Counter-identical order, cdc_bounds matching both CDC variants) + BWT radix port inside `c_trans.c` (cyclic prefix-doubling, stable tie-break — identical order to Python on periodic data, no OOM/degeneration). Wired into `transforms_v2.bwt_encode/bwt_decode_fast`, `huffman_encode/decode_block`, `shannon_entropy`, `build_lzma_dict` 8-grams, `build_shared_dict` 6-grams, `rabin_karp_cdc`; `doctor` reports HUFF/STAT. Verified bit-identical (BWT incl. `banana`/`ababab`/60KB FITS, Huffman, ngrams on FITS+dickens, both CDC variants) + full `test_roundtrip.py` green.
+**Added (batch-2):** `rissa/c_huff.c` (Huffman MSB-first pack/unpack, tree stays Python - zero divergence risk) + `rissa/c_stat.c` (one-pass hist_entropy, rank_ngrams with Counter-identical order, cdc_bounds matching both CDC variants) + BWT radix port inside `c_trans.c` (cyclic prefix-doubling, stable tie-break - identical order to Python on periodic data, no OOM/degeneration). Wired into `transforms_v2.bwt_encode/bwt_decode_fast`, `huffman_encode/decode_block`, `shannon_entropy`, `build_lzma_dict` 8-grams, `build_shared_dict` 6-grams, `rabin_karp_cdc`; `doctor` reports HUFF/STAT. Verified bit-identical (BWT incl. `banana`/`ababab`/60KB FITS, Huffman, ngrams on FITS+dickens, both CDC variants) + full `test_roundtrip.py` green.
 
-**Measured:** BWT 256K 0.14s (was seconds-per-64K Python — the max_block timeout cause is gone), Huffman 128K 0.02s, v4-1M-dict run OK with dict correctly MDL-gated off. Two C bugs found by testing, both fixed: counting array sized N+1 but early passes need 256 slots (small-input stack smash), and `O!`+`&PyList_Type` mis-links under this MinGW — use plain `O` + manual check (plus a dropped `&n` of our own making).
+**Measured:** BWT 256K 0.14s (was seconds-per-64K Python - the max_block timeout cause is gone), Huffman 128K 0.02s, v4-1M-dict run OK with dict correctly MDL-gated off. Two C bugs found by testing, both fixed: counting array sized N+1 but early passes need 256 slots (small-input stack smash), and `O!`+`&PyList_Type` mis-links under this MinGW - use plain `O` + manual check (plus a dropped `&n` of our own making).
 
-**Added:** bug-report pipeline — every run logs to a file (`%LOCALAPPDATA%/rissa/logs/rissa.log`, exe-dir then temp fallback; `rissa_tool.py logs` prints the path), uncaught CLI errors print the log path + Discord invite (`https://discord.gg/wzpwcCv92j`) and exit 1, `sys.excepthook` logs tracebacks, Tkinter GUI mirrors its log pane to the file and gains **Copy log** + **Discord** buttons, native C GUI appends UTF-8 to `rissa_gui.log` next to its exe and gains a **Discord** button. Log globs gitignored. Verified: error path prints the Discord pointer, log records all runs.
+**Added:** bug-report pipeline - every run logs to a file (`%LOCALAPPDATA%/rissa/logs/rissa.log`, exe-dir then temp fallback; `rissa_tool.py logs` prints the path), uncaught CLI errors print the log path + Discord invite (`https://discord.gg/wzpwcCv92j`) and exit 1, `sys.excepthook` logs tracebacks, Tkinter GUI mirrors its log pane to the file and gains **Copy log** + **Discord** buttons, native C GUI appends UTF-8 to `rissa_gui.log` next to its exe and gains a **Discord** button. Log globs gitignored. Verified: error path prints the Discord pointer, log records all runs.
 
 **Port policy (going forward):** default-path Python loops → C with bit-identity proof; dead paths (range-coder scaffold, order-1 experimental, GPU) stay Python with reasons recorded. Skipped: MTF Fenwick (MTF already 125MB/s C, BWT-gated anyway), order-1 pack (experimental), second CDC pass (experimental).
 
-**Rebuilt + reinstalled:** `dist/rissa-tool.exe` rebuilt (PyInstaller 6.19, frozen `doctor` all-True, exe roundtrip byte-identical); `pip install -e .` now 4.6.2 editable (needs w64devkit on PATH — `setup.cfg` forces `mingw32`; stale PyPI 3.0.0 removed). Library verified from outside the repo.
+**Rebuilt + reinstalled:** `dist/rissa-tool.exe` rebuilt (PyInstaller 6.19, frozen `doctor` all-True, exe roundtrip byte-identical); `pip install -e .` now 4.6.2 editable (needs w64devkit on PATH - `setup.cfg` forces `mingw32`; stale PyPI 3.0.0 removed). Library verified from outside the repo.
 
-**Fixed (critical, silent): circular import disabled ALL C extensions depending on entry point.** `rissa/__init__.py` did top-level `from deep_compress.compressor_v3 import ...`; whoever imported `deep_compress.compressor_v3` first (CLI, library API path, scripts) got a partially-initialized back-import, `rissa/__init__` raised, and every `HAS_C_*` silently fell back to `False` — all C extensions off, pure-Python speed, zero warning. `doctor` looked fine because it imports the `.pyd` files directly. Found because fast-mode screening picked RAW on dickens while exhaustive picked BWT_SUBBLOCK. Fix: `rissa/__init__.py` binds `compress`/`decompress` lazily (function-level imports); all in-package imports flipped to relative-first (`from .x import`, bare fallback); path inserts normalized+deduped (old code also polluted `sys.path` with un-normalized `..` chains). Verified all-True from every entry order, no shadow top-level modules.
+**Fixed (critical, silent): circular import disabled ALL C extensions depending on entry point.** `rissa/__init__.py` did top-level `from deep_compress.compressor_v3 import ...`; whoever imported `deep_compress.compressor_v3` first (CLI, library API path, scripts) got a partially-initialized back-import, `rissa/__init__` raised, and every `HAS_C_*` silently fell back to `False` - all C extensions off, pure-Python speed, zero warning. `doctor` looked fine because it imports the `.pyd` files directly. Found because fast-mode screening picked RAW on dickens while exhaustive picked BWT_SUBBLOCK. Fix: `rissa/__init__.py` binds `compress`/`decompress` lazily (function-level imports); all in-package imports flipped to relative-first (`from .x import`, bare fallback); path inserts normalized+deduped (old code also polluted `sys.path` with un-normalized `..` chains). Verified all-True from every entry order, no shadow top-level modules.
 
-**Measured after the fix (C actually active):** exhaustive alone is ~4-7× faster than every number measured before (those runs were unknowingly pure-Python — FITS v3-64K 74s→17.2s, dickens-500K 22s→3.3s). Fast screening on top: FITS 17.2s→6.9s (2.49×), dickens 3.3s→1.0s (3.37×), sensor 2.6s→0.8s (3.17×) — all byte-identical including BWT_SUBBLOCK ×8 on dickens. Exe end-to-end: full 4.2MB FITS 11s compress / 0.04s decompress, roundtrip-identical. The old "--fast shows no speedup" conclusion is retracted (it was measured with C disabled).
+**Measured after the fix (C actually active):** exhaustive alone is ~4-7× faster than every number measured before (those runs were unknowingly pure-Python - FITS v3-64K 74s→17.2s, dickens-500K 22s→3.3s). Fast screening on top: FITS 17.2s→6.9s (2.49×), dickens 3.3s→1.0s (3.37×), sensor 2.6s→0.8s (3.17×) - all byte-identical including BWT_SUBBLOCK ×8 on dickens. Exe end-to-end: full 4.2MB FITS 11s compress / 0.04s decompress, roundtrip-identical. The old "--fast shows no speedup" conclusion is retracted (it was measured with C disabled).
 
-**Added:** v3 ThreadPool parallelism (same design as v4's `use_mp`): per-block MDL factored verbatim into `_eval_block_v3` (pure function, shared inputs read-only), `compress_with_dict(..., max_workers=None)` — None = auto (6 threads when >4 blocks, else serial), 1 = forced serial. Ordered reassembly → parallel output byte-identical (proven serial==auto==pool6 on FITS both modes + all backends both modes). FITS v3-64K: exhaustive-serial 16.2s → auto 4.3s (3.8×); fast-serial 7.1s → fast-auto 2.1s (3.4×); combined 16.2s→2.1s (**7.7×**, identical 3,286,048B). Full `test_roundtrip.py` green.**
+**Added:** v3 ThreadPool parallelism (same design as v4's `use_mp`): per-block MDL factored verbatim into `_eval_block_v3` (pure function, shared inputs read-only), `compress_with_dict(..., max_workers=None)` - None = auto (6 threads when >4 blocks, else serial), 1 = forced serial. Ordered reassembly → parallel output byte-identical (proven serial==auto==pool6 on FITS both modes + all backends both modes). FITS v3-64K: exhaustive-serial 16.2s → auto 4.3s (3.8×); fast-serial 7.1s → fast-auto 2.1s (3.4×); combined 16.2s→2.1s (**7.7×**, identical 3,286,048B). Full `test_roundtrip.py` green.**
 
 ## Known issues
 
-- **v4 huffman backend decompress is broken (pre-existing).** `compressor_v4.compress_v4(backend='huffman')` writes a truncated block (huffman branch emits no payload), so `decompress_v4` fails with `struct.error`. Verified pre-existing via `git stash` on original code — not a regression. Not used by any default path (defaults are lzma/zstd/zlib); `compressor_v2`'s huffman path roundtrips fine. Tracked by `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py`, which prints FIXED if behavior ever changes.
+- **v4 huffman backend decompress is broken (pre-existing).** `compressor_v4.compress_v4(backend='huffman')` writes a truncated block (huffman branch emits no payload), so `decompress_v4` fails with `struct.error`. Verified pre-existing via `git stash` on original code - not a regression. Not used by any default path (defaults are lzma/zstd/zlib); `compressor_v2`'s huffman path roundtrips fine. Tracked by `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py`, which prints FIXED if behavior ever changes.
 
-## v4.6.1 — 2026-09-04 — Timed end-to-end benchmark + RLE pre-pass + rissa[arrow]
+## v4.6.1 - 2026-09-04 - Timed end-to-end benchmark + RLE pre-pass + rissa[arrow]
 
-**Added:** generic `RLE` pre-pass (`>BH` pairs, 65K chunk split) as MDL-gated TID 19 — 5MB `x` → 231B pre-backend; `rissa[arrow]` extra (`pyarrow>=13`) + `RissaCodec` shim (`pa.Buffer`/buffer-protocol, `register()` documents that true `pa.Codec('rissa')` needs the C++ side); `rissa/arrow_glue.c` zero-copy Arrow-buffer → SHUFFLE/DELTA (`w64devkit`, bit-identical); `draft/pyarrow-codec` branch with C++ registration notes (`docs/arrow-pr.md`).
+**Added:** generic `RLE` pre-pass (`>BH` pairs, 65K chunk split) as MDL-gated TID 19 - 5MB `x` → 231B pre-backend; `rissa[arrow]` extra (`pyarrow>=13`) + `RissaCodec` shim (`pa.Buffer`/buffer-protocol, `register()` documents that true `pa.Codec('rissa')` needs the C++ side); `rissa/arrow_glue.c` zero-copy Arrow-buffer → SHUFFLE/DELTA (`w64devkit`, bit-identical); `draft/pyarrow-codec` branch with C++ registration notes (`docs/arrow-pr.md`).
 
 **Benchmark** (`deep_compress/bench_461.py`, single 1M blocks, lzma backend, 1 run + roundtrip assert; micro 5 reps; i7-8750H, Python 3.13.14):
 
-Micro — C active, bit-identical: SHUFFLE 1358.3 MB/s, BIT 344.2 MB/s, DELTA 1188.1 MB/s.
+Micro - C active, bit-identical: SHUFFLE 1358.3 MB/s, BIT 344.2 MB/s, DELTA 1188.1 MB/s.
 
 | Corpus | Orig | xz -9 (s) | zstd-19 (s) | rissa | comp s / MB/s | decomp s / MB/s | hist | vs xz |
 |--------|------|-----------|-------------|-------|---------------|-----------------|------|-------|
@@ -76,45 +76,45 @@ Micro — C active, bit-identical: SHUFFLE 1358.3 MB/s, BIT 344.2 MB/s, DELTA 11
 | Silesia sao-1M | 1048576 | 649244 (0.396) | 732075 (0.278) | 650308 | 44.26 / 0.02 | 0.041 / 25.6 | RAW | +0.16% |
 | Silesia x-ray-1M | 1048576 | 536616 (0.280) | 630299 (0.228) | 477317 | 35.94 / 0.03 | 0.242 / 4.3 | SHUFFLE_2 | -11.05% |
 
-**Read honestly:** compress speed (0.01–0.03 MB/s on hard 1M blocks) is the bottleneck — MDL tries ~18 transforms × lzma each per block; the C transforms made transform time negligible, backend search dominates. Decompression is 1.6–350 MB/s (no search). The nci/xml/x-ray 1M-sample wins (-5 to -11%) are samples, not full files — the full-file Silesia table (11 ties + x-ray -3.9%) stands. nci-1M shows `RAW` yet -6.16%: rissa's lzma path settings differ from plain `xz -9`; reported as measured. Sensor row is 480KB (generator output), labeled as such.
+**Read honestly:** compress speed (0.01-0.03 MB/s on hard 1M blocks) is the bottleneck - MDL tries ~18 transforms × lzma each per block; the C transforms made transform time negligible, backend search dominates. Decompression is 1.6-350 MB/s (no search). The nci/xml/x-ray 1M-sample wins (-5 to -11%) are samples, not full files - the full-file Silesia table (11 ties + x-ray -3.9%) stands. nci-1M shows `RAW` yet -6.16%: rissa's lzma path settings differ from plain `xz -9`; reported as measured. Sensor row is 480KB (generator output), labeled as such.
 
-## v4.6 — 2026-09-03 — Pure C SHUFFLE/BIT/DELTA 141-308x via w64devkit
+## v4.6 - 2026-09-03 - Pure C SHUFFLE/BIT/DELTA 141-308x via w64devkit
 
-**Added:** `rissa/c_shuffle.c` `rissa/c_bit.c` `rissa/c_delta.c` pure `C` `O3 -mavx2` `E:\w64devkit\bin\gcc` `mingw32` — `SHUFFLE 141×` `20×1M` `2.020s→0.014s`, `BIT 308×` `19.585s→0.063s`, `DELTA 111×` `3.22s→0.029s`, `w64devkit` `GCC 16.2.0` `MSVCRT` `pthreads`, `no pyx`, `rissa/c_shuffle.cp313-win_amd64.pyd` `bit-identical` fallback `shuffle_cpu` if `ImportError`.
+**Added:** `rissa/c_shuffle.c` `rissa/c_bit.c` `rissa/c_delta.c` pure `C` `O3 -mavx2` `E:\w64devkit\bin\gcc` `mingw32` - `SHUFFLE 141×` `20×1M` `2.020s→0.014s`, `BIT 308×` `19.585s→0.063s`, `DELTA 111×` `3.22s→0.029s`, `w64devkit` `GCC 16.2.0` `MSVCRT` `pthreads`, `no pyx`, `rissa/c_shuffle.cp313-win_amd64.pyd` `bit-identical` fallback `shuffle_cpu` if `ImportError`.
 
-**Changed:** `deep_compress/transforms_v2.py` `HAS_C_*` try `import rissa.c_*` → `C` if `stride==4`/`len>=8` else `Python` fallback — hybrid `C` hot paths + `Python` `MDL` `1+len(extra)` orchestration.
+**Changed:** `deep_compress/transforms_v2.py` `HAS_C_*` try `import rissa.c_*` → `C` if `stride==4`/`len>=8` else `Python` fallback - hybrid `C` hot paths + `Python` `MDL` `1+len(extra)` orchestration.
 
-## v4.5.1 — 2026-09-03 — Critical audit fixes
+## v4.5.1 - 2026-09-03 - Critical audit fixes
 
-**Fixed — 5 Critical (Top Priority):**
-- **BWT disabled for >2048:** `compressor_v4.py:69` `if tid in [5,12] and len(block) >2048: continue` → `>256K` (radix handles 256K, `BWT_SUBBLOCK` 4×256K for 1M) — `BWT_MTF`/`BWT_MTF_RLE` were dead weight on real data
+**Fixed - 5 Critical (Top Priority):**
+- **BWT disabled for >2048:** `compressor_v4.py:69` `if tid in [5,12] and len(block) >2048: continue` → `>256K` (radix handles 256K, `BWT_SUBBLOCK` 4×256K for 1M) - `BWT_MTF`/`BWT_MTF_RLE` were dead weight on real data
 - **RLE_ZERO overflow >258:** `transforms_v2.py:15` `4-zero marker [0,0,0,0,N-4]` now caps `run<259` and splits large runs into multiple 259-blocks (was single-byte overflow)
-- **Versioning not frozen:** `compressor_v4.py:5` `VERSION=4` frozen as stable `v1.0` spec, old `.rissa` always decodable via `DCM2` fallback — no more arbitrary jumps `v2→v3→v4→v4.4`
-- **RACD whitespace bug:** `racd_encode` `re.split(br'\s+')` + `b' '.join` normalized `b'  field1   field2'` → removed from `TRANSFORMS_V2` (was `TID 18`), moved to `TRANSFORMS_EXPERIMENTAL[18]` — gated, not tried by default MDL (was wasting CPU on known losing transform)
+- **Versioning not frozen:** `compressor_v4.py:5` `VERSION=4` frozen as stable `v1.0` spec, old `.rissa` always decodable via `DCM2` fallback - no more arbitrary jumps `v2→v3→v4→v4.4`
+- **RACD whitespace bug:** `racd_encode` `re.split(br'\s+')` + `b' '.join` normalized `b'  field1   field2'` → removed from `TRANSFORMS_V2` (was `TID 18`), moved to `TRANSFORMS_EXPERIMENTAL[18]` - gated, not tried by default MDL (was wasting CPU on known losing transform)
 - **Multiprocessing half-implemented:** `compressor_v4.py:133` `use_mp` flag set but never used → now `ThreadPoolExecutor(max_workers=6)` for `>4` blocks `≥1M` (physical cores, not 12 HT), `HDD` note `2-3` workers, `XOR_PREV` disabled in parallel via loud check
 
-## v4.5 — 2026-09-03 — Narrow gap with xz on general data (0.12% → 0.002%)
+## v4.5 - 2026-09-03 - Narrow gap with xz on general data (0.12% → 0.002%)
 
-**Narrowed `nci` 33M single-block `+2,188` `0.12%` → `+32B` `0.002%` tie:** `xz -9` `1,738,884` vs `rissa` `1,738,916` `+32B` header only — was `1,741,072` `+2,188` with `CDC` overhead `496K` raw `2.4K` compressed + `5×1M` `600B` header. **Why:** `CDC` gated (correct), but `lzma` backend now `preset 9|PRESET_EXTREME` `64M` dict to match `xz -9` `64M` `PRESET_EXTREME` (was `preset 9` without `EXTREME` → `64K` `3964` vs `3852` `+112` per block). `No-Op` bypass `single block RAW win, no dict` `MAGIC+0xFF` flag would make `+32B` → `0` `pure tie` — left commented `compressor_v4.py:1` for compatibility, `+32B` is `0.002%` `2KB` on `33MB` tie for practical purposes as you noted. **Backend tuned, gap essentially closed.**
+**Narrowed `nci` 33M single-block `+2,188` `0.12%` → `+32B` `0.002%` tie:** `xz -9` `1,738,884` vs `rissa` `1,738,916` `+32B` header only - was `1,741,072` `+2,188` with `CDC` overhead `496K` raw `2.4K` compressed + `5×1M` `600B` header. **Why:** `CDC` gated (correct), but `lzma` backend now `preset 9|PRESET_EXTREME` `64M` dict to match `xz -9` `64M` `PRESET_EXTREME` (was `preset 9` without `EXTREME` → `64K` `3964` vs `3852` `+112` per block). `No-Op` bypass `single block RAW win, no dict` `MAGIC+0xFF` flag would make `+32B` → `0` `pure tie` - left commented `compressor_v4.py:1` for compatibility, `+32B` is `0.002%` `2KB` on `33MB` tie for practical purposes as you noted. **Backend tuned, gap essentially closed.**
 
 **Added:** `v4.5` bump `pyproject 4.5.0` `rissa 4.5.0` `MAGIC RISA v4.5` docs `v4.1`→`v4.5`.
 
-## v4.4 — 2026-09-03 — CDC gated, not promoted + Silesia single-block tie
+## v4.4 - 2026-09-03 - CDC gated, not promoted + Silesia single-block tie
 
-**CDC result — actual loss before earlier win:** File-scale `nci` 33M `xz -9` **1,738,884** vs `CDC+lzma 9` `1,738,632` + compressed dict `2,440` = **1,741,072 lose -2,188 (0.12%)** (was 64K single-block `3524 vs 3964 WIN +440` on first block only). **Why it didn't replicate:** dict built from first 64K overfits first block, other blocks at 1024K/5120K all `+0` tie — redundancy concentrated near start (header/boilerplate), not general. Spread-sample `3×512K` still `1,741,072` lose. **Not promoted:** CDC remains gated behind `--experimental`, `nci` stays `RAW` tie in `KNOWN_RESULTS.md` — not shipped as working feature, correctly gated experiment.
+**CDC result - actual loss before earlier win:** File-scale `nci` 33M `xz -9` **1,738,884** vs `CDC+lzma 9` `1,738,632` + compressed dict `2,440` = **1,741,072 lose -2,188 (0.12%)** (was 64K single-block `3524 vs 3964 WIN +440` on first block only). **Why it didn't replicate:** dict built from first 64K overfits first block, other blocks at 1024K/5120K all `+0` tie - redundancy concentrated near start (header/boilerplate), not general. Spread-sample `3×512K` still `1,741,072` lose. **Not promoted:** CDC remains gated behind `--experimental`, `nci` stays `RAW` tie in `KNOWN_RESULTS.md` - not shipped as working feature, correctly gated experiment.
 
 **Added:** `BWT_SUBBLOCK` 1M→4×256K sub-blocks, `BIT_TRANSPOSE` 8×8, `SHUFFLE4_DELTA` composition with loud cost comment `transforms_v2.py:15`, `bwt_range.py` range coder draft gated, `cdc_dict.py` `FE FE` escape fuzzed.
 
-## v4.3 — 2026-09-03 — Silesia 11 ties + x-ray WIN + single-block adaptive
+## v4.3 - 2026-09-03 - Silesia 11 ties + x-ray WIN + single-block adaptive
 
-**Silesia 11 ties + x-ray WIN:** `dickens 2764K tie`, `nci 1698K tie`, `x-ray 4212K WIN -3.9% BIT_PLANE` (was 5×1M 1,738K tie with +32B, now single-block adaptive `<=4M` → `1×` header). `BWT_SUBBLOCK` not yet picked on `nci/xml` — needs SA-IS.
+**Silesia 11 ties + x-ray WIN:** `dickens 2764K tie`, `nci 1698K tie`, `x-ray 4212K WIN -3.9% BIT_PLANE` (was 5×1M 1,738K tie with +32B, now single-block adaptive `<=4M` → `1×` header). `BWT_SUBBLOCK` not yet picked on `nci/xml` - needs SA-IS.
 
-## v4.1 — 2026-09-03 — Adaptive + Dict Gate + Early-stop
+## v4.1 - 2026-09-03 - Adaptive + Dict Gate + Early-stop
 
 **Added:**
 - `compress_v4` adaptive `<=4M` single block (was 5×1M 1056B → single 652B vs `xz` 620B `+32B`), `max_block` for `<=15M` single 2700 vs `xz` 2476, `force_dict` debug
 - Dict gate: 256K sample + compressed overhead `gain > overhead*0.5`, `>1M` always-on only if gain, `force_dict` prints `[rissa] forced`
-- Hard early-stop `<1%` raw skips 16T `LZMA` tests — 5MB `x*` 0.3→3.0 MB/s 10×
+- Hard early-stop `<1%` raw skips 16T `LZMA` tests - 5MB `x*` 0.3→3.0 MB/s 10×
 - BWT radix 2-byte bucket up to 256K (was 4K naive 50K 2.3s), `BWT_SUBBLOCK` 1M→4×256K, `priority_order` now `16` for `>256K`
 - `rissa` `__version__ 4.4.0`, `pyproject 4.4.0`, `MAGIC RISA v4.4` docs updated from `v3` (range coder gated `--experimental`, Silesia pending)
 
@@ -124,19 +124,19 @@ Micro — C active, bit-identical: SHUFFLE 1358.3 MB/s, BIT 344.2 MB/s, DELTA 11
 - `firebase.json` `rewrites ** → /index.html` removed → `cleanUrls` so `/tool.html` now 404 (was SPA serving index)
 
 **Removed:**
-- `public/tool.html` 78 lines (browser `CompressionStream` demo, desktop `tools/rissa_tool.py gui` kept) — `git rm` + `.gitignore` updated
-- Em dashes `—` → `-` in 14 files `pyproject/README/THEORY` etc
+- `public/tool.html` 78 lines (browser `CompressionStream` demo, desktop `tools/rissa_tool.py gui` kept) - `git rm` + `.gitignore` updated
+- Em dashes `-` → `-` in 14 files `pyproject/README/THEORY` etc
 
 **Fixed:**
 - `rissa` import `ModuleNotFoundError` via `try: from transforms_v2 except: from .transforms_v2` `deep_compress/__init__.py`, `rissa/__init__.py`
 - `compressor_v4.py` docstring `Implements user spec:` outside `"""` → `SyntaxError` at `2. Block`
 - `bwt_encode` priority `len(block) >256K` before `block` defined `UnboundLocalError` → static `priority_order`
-- CDC `0xFE FE` escape and `FE FF+idx` token `4B` (was `FE+idx` 3B ambiguous on `FE FF FE` etc) — fuzzed `FE FE FE`, `FE FF FE`, start/end
+- CDC `0xFE FE` escape and `FE FF+idx` token `4B` (was `FE+idx` 3B ambiguous on `FE FF FE` etc) - fuzzed `FE FE FE`, `FE FF FE`, start/end
 - Range coder `bwt_range.py` renormalization `cache` + `prob 1..4095` clamp + `_update_prob >>5`
 - `rissa` `ModuleNotFoundError` + `pyproject` `your/rissa` → `DEADTUNA4/rissa` + `.gitignore` `deep_compress/corpora/` etc
 - Nav `your/rissa` → `DEADTUNA4/rissa` on all 5 pages + `style.css` shared
 
-## v4 — 2026-09-03 — LZMA preset_dict killer
+## v4 - 2026-09-03 - LZMA preset_dict killer
 
 **Added:**
 - 1M/4M blocks (was 16K), `build_lzma_dict` 8-byte freq + CDC `hash & 0xFFF` avg 4K, `preset_dict` via `LZMACompressor(preset_dict=)`, header `RISA v4` dict `lzma.compress`ed
@@ -146,17 +146,17 @@ Micro — C active, bit-identical: SHUFFLE 1358.3 MB/s, BIT 344.2 MB/s, DELTA 11
 
 **Changed:** `BWT` limit 4K→256K radix, `priority_order` `RAW→BWT→DELTA→SHUFFLE`, `use_mp` stub
 
-## v3 — 2026-09-02 — Streaming + shared dict
+## v3 - 2026-09-02 - Streaming + shared dict
 
 **Added:** 64K/128K (was 16K), `compress_stream`/`decompress_stream` `for block in stream`, shared dict 1MB→64KB `zstandard.train_dictionary`
 
-## v2 — 2026-09-01 — Per-block MDL
+## v2 - 2026-09-01 - Per-block MDL
 
 **Added:** 16K blocks, 9→16 transforms (`DELTA_ZIGZAG`, `SHUFFLE`, `FLOAT_SPLIT`, `BIT_TRANSPOSE`), `BWT_MTF+RLE` 4-zero marker, `MAGIC RISA`
 
-## v1 — 2026-08-31 — Baseline
+## v1 - 2026-08-31 - Baseline
 
-**Added:** Huffman order-0 + RLE, `MAGIC RISA v1` — `Counter 5KB` 1512 vs `delta` 5512 lose
+**Added:** Huffman order-0 + RLE, `MAGIC RISA v1` - `Counter 5KB` 1512 vs `delta` 5512 lose
 
 ## Docs
 

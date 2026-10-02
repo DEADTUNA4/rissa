@@ -1,5 +1,5 @@
 """
-rissa[arrow] — pyarrow integration shim.
+rissa[arrow] - pyarrow integration shim.
 
 Status: pure-Python bridge. True ``pa.Codec('rissa')`` requires the C++
 ``arrow::util::Codec::RegisterCodec`` patch (see ``arrow_glue.cc`` draft
@@ -76,7 +76,7 @@ def register(level: int = 3) -> RissaCodec:
 
     Returns a :class:`RissaCodec`. True ``pa.Codec('rissa')`` support
     needs the ``arrow_glue.cc`` C++ patch merged into Arrow and a
-    rebuilt pyarrow — tracked as a Draft PR, not claimed here.
+    rebuilt pyarrow - tracked as a Draft PR, not claimed here.
     """
     try:
         import pyarrow as pa  # noqa: F401

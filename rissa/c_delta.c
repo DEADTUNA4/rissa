@@ -1,7 +1,7 @@
 #include <Python.h>
 #include <stdint.h>
 
-// Pure C DELTA + DELTA_ZIGZAG + DELTA2 — 141x like SHUFFLE, w64devkit GCC 16.2
+// Pure C DELTA + DELTA_ZIGZAG + DELTA2 - 141x like SHUFFLE, w64devkit GCC 16.2
 // Matches transforms_v2.py delta_encode, zigzag, delta2
 
 static PyObject* c_delta(PyObject* self, PyObject* args) {

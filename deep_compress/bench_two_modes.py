@@ -1,7 +1,7 @@
 """
-Two Benchmark Modes — rissa on ASUS TUF FX504GE (i7-8750H 6c/12t, 32GB, Seagate HDD)
-A) Pure CPU in-memory (no I/O) — true algorithm speed
-B) Full pipeline I/O — wall-clock with HDD
+Two Benchmark Modes - rissa on ASUS TUF FX504GE (i7-8750H 6c/12t, 32GB, Seagate HDD)
+A) Pure CPU in-memory (no I/O) - true algorithm speed
+B) Full pipeline I/O - wall-clock with HDD
 Handles multiprocessing limits, caching, median reporting, diverse datasets.
 """
 import time, pathlib, statistics, os, sys, lzma, zlib, bz2
@@ -14,7 +14,7 @@ CPU_PHYSICAL = 6
 CPU_LOGICAL = 12
 
 def pure_cpu_benchmark(data: bytes, level=9, block_size=BLOCK_1M, use_dict=True, runs=5):
-    """A) Pure CPU in-memory — data already in RAM, time only compress/decompress"""
+    """A) Pure CPU in-memory - data already in RAM, time only compress/decompress"""
     # Warm-up
     _ = compress_v4(data, backend="lzma", level=level, block_size=block_size, use_dict=use_dict)
     comp_times, decomp_times = [], []
@@ -38,7 +38,7 @@ def pure_cpu_benchmark(data: bytes, level=9, block_size=BLOCK_1M, use_dict=True,
     return comp_size, comp_med, decomp_med, comp_speed, decomp_speed
 
 def full_pipeline_benchmark(in_path: pathlib.Path, out_path: pathlib.Path, block_size=BLOCK_4M):
-    """B) Full pipeline I/O — open to close, 4MB blocks to reduce HDD seeks, sequential reads"""
+    """B) Full pipeline I/O - open to close, 4MB blocks to reduce HDD seeks, sequential reads"""
     # Use streaming API to avoid loading whole file twice
     from compressor_v3 import compress_stream, decompress_stream
     t0=time.perf_counter()
@@ -70,7 +70,7 @@ def clear_cache():
     except: pass
 
 def bench_with_workers(data, workers_list=[1,2,4,6,12]):
-    """Test scaling 1,2,4,6,12 workers — HDD: use 2-3, RAM: use 6"""
+    """Test scaling 1,2,4,6,12 workers - HDD: use 2-3, RAM: use 6"""
     import concurrent.futures
     results = {}
     for w in workers_list:
@@ -101,7 +101,7 @@ if __name__=="__main__":
         ts+=1
         sensor.extend(struct.pack('<If', ts, 20+5*math.sin(i*0.01)))
     datasets.append(("Sensor 6MB", bytes(sensor)))
-    # 3. Mixed text/code 50MB — use dickens if available else synthetic
+    # 3. Mixed text/code 50MB - use dickens if available else synthetic
     p=pathlib.Path("deep_compress/silesia/dickens")
     if p.exists():
         datasets.append(("Text dickens 5MB", p.read_bytes()[:5*1024*1024]))
@@ -115,7 +115,7 @@ if __name__=="__main__":
         col.extend(struct.pack('<III', i%1000, i%5000, 1609459200+i))
     datasets.append(("Columnar 3.6MB", bytes(col)))
 
-    print(f"System: i7-8750H 6c/12t, 32GB, Seagate HDD — In-memory vs Full pipeline — 12 threads max")
+    print(f"System: i7-8750H 6c/12t, 32GB, Seagate HDD - In-memory vs Full pipeline - 12 threads max")
     print(f"{'File':20} {'Size':>8} {'xz -9':>8} {'rissa':>8} {'rissa CPU MB/s':>14} {'rissa I/O MB/s':>14} {'Workers':>8}")
     print("-"*100)
     for name, data in datasets:
@@ -126,10 +126,10 @@ if __name__=="__main__":
         comp_sz, comp_t, decomp_t, comp_speed, decomp_speed = pure_cpu_benchmark(data, level=9, block_size=BLOCK_1M, runs=3)
         # Baseline xz
         xz_sz=len(lzma.compress(data, preset=9))
-        # Full pipeline would be measured per file on HDD — here we simulate with in-memory for demo
+        # Full pipeline would be measured per file on HDD - here we simulate with in-memory for demo
         # For real HDD, use full_pipeline_benchmark(Path, Path)
         # Workers scaling
         # Ratio
         print(f"{name:20} {len(data)//1024:7}K {xz_sz:8} {comp_sz:8} {comp_speed:14.1f} {comp_speed*0.6:14.1f} {CPU_PHYSICAL} (HDD use 2-3)")
 
-    print("\nNotes: HDD I/O cannot feed 12 workers — use 2-3 for pipeline, 6 for RAM. Use imap, reuse pool, pass offsets not blocks to avoid pickle overhead. Shared_memory or fork (Windows spawn overhead high) — prefer threads for small blocks.")
+    print("\nNotes: HDD I/O cannot feed 12 workers - use 2-3 for pipeline, 6 for RAM. Use imap, reuse pool, pass offsets not blocks to avoid pickle overhead. Shared_memory or fork (Windows spawn overhead high) - prefer threads for small blocks.")

@@ -1,6 +1,6 @@
-# Format — .rissa File Format
+# Format - .rissa File Format
 
-**MAGIC `RISA` v4 — https://rissa.web.app/spec.html — deterministic, versioned, streaming**
+**MAGIC `RISA` v4 - https://rissa.web.app/spec.html - deterministic, versioned, streaming**
 
 ## Overview
 
@@ -59,12 +59,12 @@ For single-block `<=4M` file, `NUM_BLOCKS=1` header overhead `4+1+1+4+4+8 + per-
 | 12 | `BWT_MTF_RLE` | `>H` | BWT+MTF+RLE 4-zero marker |
 | 13 | `FLOAT_SPLIT` | `b"\x04"` | IEEE754 4-stream |
 | 14 | `BIT_TRANSPOSE` | `b""` | 8×8 bit matrix |
-| 15 | `SHUFFLE4_DELTA` | `b"\x04"` | composition `SHUFFLE→DELTA` (single TID, single extra — see cost note) |
+| 15 | `SHUFFLE4_DELTA` | `b"\x04"` | composition `SHUFFLE→DELTA` (single TID, single extra - see cost note) |
 | 16 | `BWT_SUBBLOCK` | `>H sub_size + >H num + 2*num primaries` | 1M→4×256K sub-blocks |
 | 99 | `XOR_PREV` | `b"XORP"+>I` | cross-block XOR (disabled in parallel/streaming, loud check) |
 | 100 | `BIT_PLANE` | `b""` | bit-plane separation |
 
-Cost for `TID 15` is currently `1+len(extra)` single-T MDL — general `T1→T2` should be `Cost(T1)+Cost(T2)+Cost(Data|T1,T2)` (`transforms_v2.py:15` loud comment).
+Cost for `TID 15` is currently `1+len(extra)` single-T MDL - general `T1→T2` should be `Cost(T1)+Cost(T2)+Cost(Data|T1,T2)` (`transforms_v2.py:15` loud comment).
 
 ## Metadata
 
@@ -77,4 +77,4 @@ Cost for `TID 15` is currently `1+len(extra)` single-T MDL — general `T1→T2`
 - `v3` (`MAGIC DCM2` 64K/128K) → `v4` (`RISA` 1M/4M) decompressor accepts both (`compressor_v4.py:decompress_v4` falls back to `compressor_v3`).
 - Deterministic: sorted `TRANSFORMS_V2` iteration, no hash tie-break. Same input → same `.rissa`.
 
-Source: `deep_compress/compressor_v3.py`, `compressor_v4.py`, `transforms_v2.py` — Apache 2.0.
+Source: `deep_compress/compressor_v3.py`, `compressor_v4.py`, `transforms_v2.py` - Apache 2.0.

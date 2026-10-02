@@ -10,6 +10,10 @@ try:
 except ImportError:
     from diag import note
 try:
+    from .errors import FormatError, TruncatedError
+except ImportError:
+    from errors import FormatError, TruncatedError
+try:
     from .transforms_v2 import TRANSFORMS_V2, HAS_C_TRANS
 except ImportError:
     from transforms_v2 import TRANSFORMS_V2, HAS_C_TRANS
@@ -298,7 +302,7 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
         results = [_eval_block_v3(b, backend, level, has_zstd, zstd_dict, fast) for b in blocks]
     for block, (best_tid, best_extra, best_payload, best_name) in zip(blocks, results):
         if len(best_extra) > 255:
-            raise ValueError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
+            raise FormatError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
         chosen.append(best_name)
         out.append(best_tid)
         out.append(len(best_extra))
@@ -332,13 +336,13 @@ def decompress_with_dict(data: bytes):
             except ImportError:
                 from deep_compress.compressor_v2 import decompress_with_backend
             return decompress_with_backend(data)
-        raise ValueError(f"bad magic {data[:4]!r} expected RISA")
+        raise FormatError(f"bad magic {data[:4]!r} expected RISA")
     pos=4
     def _need(n, what):
         nonlocal pos
         chunk = data[pos:pos+n]
         if len(chunk) < n:
-            raise EOFError(f"truncated .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
+            raise TruncatedError(f"truncated .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
         pos += n
         return chunk
     version=_need(1, "version")[0]
@@ -350,19 +354,19 @@ def decompress_with_dict(data: bytes):
             from deep_compress.compressor_v2 import decompress_with_backend
         return decompress_with_backend(data)
     if version == 4:
-        raise ValueError("v4 .rissa frame: use decompress_v4(), not decompress_with_dict()")
+        raise FormatError("v4 .rissa frame: use decompress_v4(), not decompress_with_dict()")
     if version != 3:
-        raise ValueError(f"unsupported .rissa version {version} (expected 2, 3 or 4)")
+        raise FormatError(f"unsupported .rissa version {version} (expected 2, 3 or 4)")
     backend_id=_need(1, "backend id")[0]
     try:
         backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
     except KeyError:
-        raise ValueError(f"invalid backend id {backend_id} (expected 0-3)")
+        raise FormatError(f"invalid backend id {backend_id} (expected 0-3)")
     num_blocks=struct.unpack(">I", _need(4, "block count"))[0]
     if num_blocks == STREAM_SENTINEL:
-        raise ValueError("streaming .rissa frame: use decompress_stream(), not decompress_with_dict()")
+        raise FormatError("streaming .rissa frame: use decompress_stream(), not decompress_with_dict()")
     if num_blocks > 100000:
-        raise ValueError(f"implausible block count {num_blocks} (file likely corrupt)")
+        raise FormatError(f"implausible block count {num_blocks} (file likely corrupt)")
     block_size=struct.unpack(">I", _need(4, "block size"))[0]
     dict_len=struct.unpack(">I", _need(4, "dict length"))[0]
     dict_bytes=_need(dict_len, "dict") if dict_len else None
@@ -376,7 +380,7 @@ def decompress_with_dict(data: bytes):
         extra_len=_need(1, f"block {bi} extra length")[0]
         orig_len=struct.unpack(">I", _need(4, f"block {bi} orig length"))[0]
         if tid not in TRANSFORMS_V2:
-            raise ValueError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
+            raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="huffman":
             pad=_need(1, f"block {bi} huffman padding")[0]
@@ -536,18 +540,18 @@ def decompress_stream(in_stream, out_stream):
     def _sread(n, what):
         chunk = in_stream.read(n)
         if len(chunk) < n:
-            raise EOFError(f"truncated streaming .rissa file: {what} needs {n}B, stream ended")
+            raise TruncatedError(f"truncated streaming .rissa file: {what} needs {n}B, stream ended")
         return chunk
     ver=_sread(1, "version")[0]
     if ver not in (3, 4):
-        raise ValueError(f"unsupported streaming version {ver} (expected 3 or 4)")
+        raise FormatError(f"unsupported streaming version {ver} (expected 3 or 4)")
     backend_id=_sread(1, "backend id")[0]
     try:
         backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
     except KeyError:
-        raise ValueError(f"invalid backend id {backend_id} in streaming header")
+        raise FormatError(f"invalid backend id {backend_id} in streaming header")
     if backend == "huffman":
-        raise ValueError("huffman streaming frames are not decodable (no frequency table was stored); file was written by a pre-fix writer")
+        raise FormatError("huffman streaming frames are not decodable (no frequency table was stored); file was written by a pre-fix writer")
     first=struct.unpack(">I", _sread(4, "block size / sentinel"))[0]
     if first == STREAM_SENTINEL:
         block_size=struct.unpack(">I", _sread(4, "block size"))[0]
@@ -562,10 +566,10 @@ def decompress_stream(in_stream, out_stream):
         if not hdr:
             break  # clean EOF between frames: normal end of stream
         if len(hdr)<2:
-            raise EOFError("truncated streaming .rissa file: 2B frame header cut short")
+            raise TruncatedError("truncated streaming .rissa file: 2B frame header cut short")
         tid, extra_len = hdr[0], hdr[1]
         if tid not in TRANSFORMS_V2:
-            raise ValueError(f"invalid transform id {tid} in stream at block {nblocks_out}")
+            raise FormatError(f"invalid transform id {tid} in stream at block {nblocks_out}")
         orig_len=struct.unpack(">I", _sread(4, "frame orig length"))[0]
         comp_len=struct.unpack(">I", _sread(4, "frame comp length"))[0]
         extra=_sread(extra_len, "frame extra") if extra_len else b""

@@ -17,6 +17,10 @@ try:
 except ImportError:
     from diag import note
 try:
+    from .errors import FormatError, TruncatedError
+except ImportError:
+    from errors import FormatError, TruncatedError
+try:
     from .transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
 except ImportError:
     from transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
@@ -26,14 +30,14 @@ except ImportError:
     from huffman import huffman_encode_block, huffman_decode_block
 
 MAGIC = b"RISA"
-VERSION = 4  # Frozen at 4 for stable format v1.0 spec — future changes must be backward compatible, old .rissa files always decodable via fallback to v3/v2
+VERSION = 4  # Frozen at 4 for stable format v1.0 spec - future changes must be backward compatible, old .rissa files always decodable via fallback to v3/v2
 EXT = ".rissa"
 
 BLOCK_1M = 1*1024*1024
 BLOCK_4M = 4*1024*1024
 DEFAULT_BLOCK = BLOCK_1M
 
-# Shared block evaluator (serial + parallel call THIS — no duplicated logic).
+# Shared block evaluator (serial + parallel call THIS - no duplicated logic).
 # Priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text.
 _PRIORITY_ORDER_V4 = [0, 19, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
 
@@ -75,7 +79,7 @@ def _eval_block_v4(block: bytes, backend: str, level, dict_to_use, fast: bool,
             continue
         if transformed is None:
             continue
-        # Compress with backend — tuned to xz -9 (preset 9|PRESET_EXTREME, dict 64M) to close 0.12% gap
+        # Compress with backend - tuned to xz -9 (preset 9|PRESET_EXTREME, dict 64M) to close 0.12% gap
         if backend == "lzma":
             # Use xz -9 equivalent: preset 9|PRESET_EXTREME, dict 64M
             preset_to_use = (6 | lzma.PRESET_EXTREME) if (dict_to_use and not fast) else (level | lzma.PRESET_EXTREME if level == 9 else level)
@@ -117,14 +121,14 @@ def _eval_block_v4(block: bytes, backend: str, level, dict_to_use, fast: bool,
             # Hard early-stop for highly repetitive: <1% of raw
             if total < len(block) * 0.01:
                 break
-            # Early termination disabled for now — was too aggressive (broke before RACD on nci where RAW 1.7M << ent 10M)
+            # Early termination disabled for now - was too aggressive (broke before RACD on nci where RAW 1.7M << ent 10M)
             # if ent_bytes > 0 and total <= ent_bytes * entropy_threshold:
             #     break
         # Context-mixing order-1 probe was a no-op (result discarded via pass)
         # and burned a full order-1 encode per BWT block: removed, no output change.
 
     # XOR with prev block as extra transform.
-    # LOUD CHECK: XOR_PREV is mutually exclusive with parallel/streaming — the
+    # LOUD CHECK: XOR_PREV is mutually exclusive with parallel/streaming - the
     # caller passes allow_xor_prev=False there to avoid silent corruption.
     if allow_xor_prev and len(prev_block_raw) > 0:
         try:
@@ -175,7 +179,7 @@ def _write_block_v4(out, chosen, backend, block, best_tid, best_extra, best_payl
     write time rather than silently truncated (see FORMAT.md).
     """
     if len(best_extra) > 255:
-        raise ValueError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
+        raise FormatError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
     chosen.append(best_name)
     out.append(best_tid & 0xFF)
     out.append(len(best_extra))
@@ -447,7 +451,7 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     # physical cores (not 12 HT); for HDD use fewer. ThreadPool only: no
     # processes are spawned (no pickle, no Windows spawn overhead).
     use_mp = len(blocks) > 4 and block_size >= BLOCK_1M
-    # Note: benchmark files on Seagate HDD — speed tests use in-memory data (no I/O) to avoid HDD bound; ratio is storage-independent
+    # Note: benchmark files on Seagate HDD - speed tests use in-memory data (no I/O) to avoid HDD bound; ratio is storage-independent
 
     if use_mp:
         import concurrent.futures as _cf
@@ -510,7 +514,7 @@ def decompress_v4(data: bytes):
         nonlocal pos
         chunk = data[pos:pos+n]
         if len(chunk) < n:
-            raise EOFError(f"truncated v4 .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
+            raise TruncatedError(f"truncated v4 .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
         pos += n
         return chunk
     ver=_need(1, "version")[0]
@@ -525,12 +529,12 @@ def decompress_v4(data: bytes):
     try:
         backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
     except KeyError:
-        raise ValueError(f"invalid backend id {backend_id} (expected 0-3)")
+        raise FormatError(f"invalid backend id {backend_id} (expected 0-3)")
     num_blocks=struct.unpack(">I", _need(4, "block count"))[0]
     if num_blocks == 0xFFFFFFFF:
-        raise ValueError("streaming .rissa frame: use decompress_stream(), not decompress_v4()")
+        raise FormatError("streaming .rissa frame: use decompress_stream(), not decompress_v4()")
     if num_blocks > 100000:
-        raise ValueError(f"implausible block count {num_blocks} (file likely corrupt)")
+        raise FormatError(f"implausible block count {num_blocks} (file likely corrupt)")
     block_size=struct.unpack(">I", _need(4, "block size"))[0]
     dict_comp_len=struct.unpack(">I", _need(4, "compressed dict length"))[0]
     dict_orig_len=struct.unpack(">I", _need(4, "dict length"))[0]
@@ -587,7 +591,7 @@ def decompress_v4(data: bytes):
             continue
         # Normal
         if tid not in TRANSFORMS_V2:
-            raise ValueError(f"invalid transform id {tid} in block {bi} (expected 0-19, 99, 100)")
+            raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19, 99, 100)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="lzma":
             try:
@@ -611,7 +615,7 @@ def decompress_v4(data: bytes):
         try:
             block = dec_fn(transformed, extra)
         except Exception as e:
-            raise ValueError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
+            raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
         out.extend(block[:orig_len])
         prev_block_raw = block[:orig_len]
     return bytes(out)

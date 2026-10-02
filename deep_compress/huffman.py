@@ -151,7 +151,7 @@ def estimate_huffman_size(data: bytes):
     return (total_bits + overhead_bits + 7)//8
 
 def huffman_order1_encode_block(data: bytes):
-    """Order-1: p(byte | prev) — 256 separate Huffman trees. Falls back to order-0 if context sparse."""
+    """Order-1: p(byte | prev) - 256 separate Huffman trees. Falls back to order-0 if context sparse."""
     if len(data) == 0:
         return b"", [[0]*256 for _ in range(256)], 0, {}
     if len(data) < 1024:
@@ -208,7 +208,7 @@ def huffman_order1_encode_block(data: bytes):
     out = bytearray()
     for i in range(0, len(bit_str), 8):
         out.append(int(bit_str[i:i+8], 2))
-    # For header, we need to store 256*256 frequencies (huge!) — for prototype, store only non-empty contexts
+    # For header, we need to store 256*256 frequencies (huge!) - for prototype, store only non-empty contexts
     # Instead return ctx_freq for now, caller must handle header overhead
     return bytes(out), ctx_freq, padding, codes_list
 

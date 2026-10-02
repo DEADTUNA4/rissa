@@ -1,7 +1,7 @@
 """Diagnosis policy for suppressed transform/backend errors.
 
 Default: noisy-but-safe. A failing transform candidate is skipped (valid but
-possibly suboptimal output) and recorded at debug level — never silently
+possibly suboptimal output) and recorded at debug level - never silently
 dropped without a trace.
 
 RISSA_STRICT=1: re-raise immediately. Use for debugging, benchmarking new

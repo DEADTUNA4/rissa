@@ -1,4 +1,4 @@
-/* rissa batch-1 C ports — w64devkit GCC 16.2, pure C, no deps beyond Python C-API.
+/* rissa batch-1 C ports - w64devkit GCC 16.2, pure C, no deps beyond Python C-API.
  *
  * Ports of the slow pure-Python paths in deep_compress/transforms_v2.py:
  *   shuffle (generic stride 2/4/8) + shuffle_decode (had NO C path),
@@ -431,7 +431,7 @@ static PyObject* t_rle0_decode(PyObject* self, PyObject* args) {
  * radix/naive sorts (both compute the same order): full-rotation ascending,
  * ties (periodic data) broken by rotation index ascending. Counting sorts
  * are stable and the initial order is index-ascending, so equal rotations
- * keep index order — matching Python's stable sorted().
+ * keep index order - matching Python's stable sorted().
  * O(n log n) time, O(n) memory, no degeneration on repetitive input
  * (where the naive Python sort would OOM building n full-size slices).
  * Returns (bwt_bytes|None, primary|None) just like the Python version.

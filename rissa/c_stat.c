@@ -1,4 +1,4 @@
-/* rissa stats helpers — w64devkit GCC 16.2, pure C.
+/* rissa stats helpers - w64devkit GCC 16.2, pure C.
  *
  * Ports of per-file/per-block Python counting loops that are NOT in the
  * hot transform path but still cost seconds on multi-MB inputs:
@@ -146,7 +146,7 @@ static PyObject* s_cdc_bounds(PyObject* self, PyObject* args) {
                 start = k + 1;
                 nch++;
             }
-            /* NOTE: replicates Python quirk — when the length guard fails,
+            /* NOTE: replicates Python quirk - when the length guard fails,
              * start is NOT reset (bytes re-scan into the next chunk). */
         }
         if (nch > max_chunks) break;

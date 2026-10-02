@@ -4,7 +4,7 @@
 
 `rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978.
 
-**Live docs → https://rissa.web.app — v4.4 — Apache 2.0**
+**Live docs → https://rissa.web.app - v4.4 - Apache 2.0**
 
 ---
 
@@ -85,4 +85,4 @@ python deep_compress/final_bench.py
 
 ---
 
-**License:** Apache 2.0 — See [`LICENSE`](LICENSE) — **Docs:** https://rissa.web.app
+**License:** Apache 2.0 - See [`LICENSE`](LICENSE) - **Docs:** https://rissa.web.app

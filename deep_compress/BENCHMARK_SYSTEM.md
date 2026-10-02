@@ -1,4 +1,4 @@
-# Benchmark System — rissa
+# Benchmark System - rissa
 
 **Model:** ASUS TUF Gaming FX504GE  
 **CPU:** Intel Core i7-8750H @ 2.2 GHz (6 cores, 12 threads)  
@@ -9,15 +9,15 @@
 
 **Storage**
 - System drive (C:): Micron 1100 256 GB SATA SSD
-- Secondary drive: Seagate ST2000LM007 2 TB HDD — **benchmark files stored here** (reflects typical datacenter HDD)
-- Removable: Kingston DataTraveler 3.0 (123 GB), Generic Flash Disk (31 GB) — not used
+- Secondary drive: Seagate ST2000LM007 2 TB HDD - **benchmark files stored here** (reflects typical datacenter HDD)
+- Removable: Kingston DataTraveler 3.0 (123 GB), Generic Flash Disk (31 GB) - not used
 
-**Benchmark notes — rissa**
+**Benchmark notes - rissa**
 - All test files on Seagate HDD; compression ratio is storage-independent, speed may be I/O-bound.
 - For fair MB/s, rissa benches use **in-memory** `compress_with_dict(data)` (no disk I/O) + wall-clock `time.perf_counter()`; disk I/O is noted separately.
-- Multiprocessing uses up to **12 threads** (`concurrent.futures.ProcessPoolExecutor(max_workers=12)`) — scales with 6c/12t, limited by 32GB RAM and CPU load.
-- Block size 1M (default) → 4M (max) — 1M balances 12-thread pool (100MB file → 100 tasks) vs 4M reduces tasks but larger dict window (64M). Header 0.05% at 1M.
-- Python 3.13.14 GIL + `lzma` single-threaded; rissa parallelizes **per-block transform selection** (16T) + backend, while `xz -9` is single-threaded — expect near-linear speedup on 12 threads for >4 blocks.
+- Multiprocessing uses up to **12 threads** (`concurrent.futures.ProcessPoolExecutor(max_workers=12)`) - scales with 6c/12t, limited by 32GB RAM and CPU load.
+- Block size 1M (default) → 4M (max) - 1M balances 12-thread pool (100MB file → 100 tasks) vs 4M reduces tasks but larger dict window (64M). Header 0.05% at 1M.
+- Python 3.13.14 GIL + `lzma` single-threaded; rissa parallelizes **per-block transform selection** (16T) + backend, while `xz -9` is single-threaded - expect near-linear speedup on 12 threads for >4 blocks.
 
 **Reproduce on this system**
 ```bash

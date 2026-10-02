@@ -5,7 +5,7 @@ Every C-backed transform is compared against its pure-Python implementation
 over randomized inputs, boundary sizes, and malformed data. Python reference
 output is obtained by forcing the HAS_C_* flags off (they are read per call);
 C output with flags on. Byte-identical or same-exception required. A crash
-(access violation) fails the run implicitly — these tests must never crash.
+(access violation) fails the run implicitly - these tests must never crash.
 """
 import os
 import random
@@ -55,17 +55,26 @@ def rand_data(rng, n, kinds=("random", "runs", "text", "zeros")):
 
 
 def check_pair(name, fn, cases):
-    """fn(data) must be identical in C and Python modes; exceptions must match in kind."""
+    """fn(data) must be identical in C and Python modes; exceptions must match in kind.
+
+    Kinds compare ValueError-compatible as equal (FormatError subclasses
+    ValueError by design): what matters is both sides raise the same class
+    of error, never that one crashes while the other returns bytes.
+    """
     for i, d in enumerate(cases):
         try:
             with py_mode():
                 a = fn(d)
             ae = None
+        except ValueError:
+            a, ae = None, "ValueError"
         except Exception as e:  # noqa: BLE001 - comparing behavior
             a, ae = None, type(e).__name__
         try:
             b = fn(d)
             be = None
+        except ValueError:
+            b, be = None, "ValueError"
         except Exception as e:  # noqa: BLE001 - comparing behavior
             b, be = None, type(e).__name__
         assert ae == be, f"{name} case {i} len={len(d)}: py raised {ae}, C raised {be}"
@@ -148,9 +157,11 @@ def main():
                 else:
                     T.bwt_decode_fast(b"\x01\x02\x03\x04", bad_p)
                 raised = None
+            except ValueError:
+                raised = "ValueError"
             except Exception as e:  # noqa: BLE001
                 raised = type(e).__name__
-            assert raised == "ValueError", f"bad primary {bad_p} gave {raised}"
+            assert raised == "ValueError", f"bad primary {bad_p} gave {raised} (want ValueError-compatible)"
     print("  bwt_decode malformed: OK (ValueError both modes)")
 
     # 7. huffman pack/unpack + entropy

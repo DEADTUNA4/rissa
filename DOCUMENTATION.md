@@ -1,8 +1,8 @@
-# rissa Documentation — Every Variable, How It Works, With Examples
+# rissa Documentation - Examples for Every Key Variable
 
-**https://rissa.web.app — Apache 2.0 — `pip install rissa-compress`**
+**https://rissa.web.app - Apache 2.0 - `pip install rissa-compress`**
 
-This document lists every key variable in `rissa` and explains with examples. No em dashes. Fixed errors noted.
+This document gives examples for every key variable in `rissa`. For the organized reference (public API, pipeline, transform table, format, backends) see `DEVELOPER.md`.
 
 ## Core Equation
 
@@ -14,24 +14,24 @@ Pick transform `T` with smallest total description length per block.
 
 ---
 
-## 1. `transforms_v2.py` — 16 Transforms
+## 1. `transforms_v2.py` - 19 Transforms
 
-### `data: bytes` — input block
+### `data: bytes` - input block
 Type: `bytes`, 0 to `BLOCK_SIZE` (64K/128K). Example: `b"hello"` or `bytes([1,2,3,4])`.
 
-### `out: bytearray` — transformed output
+### `out: bytearray` - transformed output
 Mutable buffer, same length as `data` for most transforms. Example: `delta_encode(b"\x01\x02\x03")` -> `bytearray([1,1,1])`.
 
-### `stride: int` — shuffle width
+### `stride: int` - shuffle width
 For `shuffle_encode(data, stride)`. Values 2,4,8. Example: `stride=4` groups 4-byte records: `b"a0b0c0d0 a1b1c1d1"` -> `b"aa bb cc dd"`. Extra `b"\x04"` stored, counted in MDL.
 
-### `primary: int` — BWT primary index
+### `primary: int` - BWT primary index
 0 to `len(data)-1`, stored as `>H` 2 bytes. Example: `bwt_encode(b"banana")` -> `(b"nnbaaa", 3)`.
 
-### `zz: int` — zigzag value
+### `zz: int` - zigzag value
 Maps signed -128..127 to 0..255. Example: `delta 1 -> zz 2`, `delta -1 (255) -> zz 1`. `zigzag_encode([100,99])` -> delta -1 -> zz 1.
 
-### `transposed: list[int]` — 8x8 bit matrix
+### `transposed: list[int]` - 8x8 bit matrix
 For `bit_transpose_encode`. Example: 8 bytes `0b00000001` each -> transposed `0b11111111` etc.
 
 **Fixed errors:**
@@ -49,7 +49,7 @@ bit_transpose_encode(b"\x01\x02"*4)  # 8x8 transpose
 
 ---
 
-## 2. `compressor_v3.py` — Per-block MDL
+## 2. `compressor_v3.py` - Per-block MDL
 
 ### `BLOCK_SIZE_64K = 65536`, `BLOCK_SIZE_128K = 131072`
 Block size. 128K has 0.4% header vs 3% at 16K. Example: 500K file → 8 blocks at 64K, 4 at 128K.
@@ -57,13 +57,13 @@ Block size. 128K has 0.4% header vs 3% at 16K. Example: 500K file → 8 blocks a
 ### `MAGIC = b"RISA"` , `VERSION = 3`, `EXT = ".rissa"`
 Header 4 bytes. Legacy `DCM2` auto-migrated. Example file starts `52 49 53 41 03`.
 
-### `dict_bytes: bytes | None` — shared dictionary
+### `dict_bytes: bytes | None` - shared dictionary
 1MB sample → 64KB via `zstandard.train_dictionary` fallback 6-grams. MDL-gated: only kept if `with+dict < without` `compressor_v3.py:12`. Example: 46MB parquet truncated → dict disabled (overhead), 2MB text → dict 65K.
 
 ### `zstd_dict: ZstdCompressionDict | None`
 Compiled dict for `ZstdCompressor(dict_data=...)`. Example: `zstd.ZstdCompressor(level=19, dict_data=zstd_dict).compress(block)`.
 
-### `block: bytes` — one chunk
+### `block: bytes` - one chunk
 Slice `data[i:i+block_size]`. Example: `data[0:65536]`.
 
 ### `transformed: bytes`, `extra: bytes`
@@ -80,31 +80,31 @@ For `for block in stream` without RAM. Example: `compress_stream(open('in.bin','
 
 ---
 
-## 3. `huffman.py` / `rans.py` — Entropy
+## 3. `huffman.py` - Entropy (`rans.py` retired to `archive/` - no rANS anywhere; range scaffolding lives in `bwt_range.py`, experimental)
 
-### `freq: list[int]` — 256 counts
+### `freq: list[int]` - 256 counts
 `freq[65]` for `A`. Example: `b"AAA"` → `freq[65]=3`.
 
-### `codes: dict[int, str]` — Huffman codes
+### `codes: dict[int, str]` - Huffman codes
 `65: "0"` frequent. Example: `build_codes(tree)`.
 
-### `padding: int` — 0..7
+### `padding: int` - 0..7
 Bits to fill last byte. Example: bit string `101` → `10100000` padding 5.
 
 ### `encoded: bytes`
 Packed bits. Example: `huffman_encode_block(b"AAA")` → `b"\x00"`.
 
 ### `entropy: float`, `bits_per_sym: float`
-Shannon ` -sum(p log2 p)` `rans.py:12`. Example: `b"a"*1000` ent 0.00, Huffman 1.00 b/sym → rANS would be ~0 (shows Huffman waste).
+Shannon ` -sum(p log2 p)` (`huffman.shannon_entropy`). Example: `b"a"*1000` ent 0.00, Huffman 1.00 b/sym (shows Huffman waste vs the Shannon limit).
 
 ---
 
-## 4. `rissa` package — `rissa/__init__.py`
+## 4. `rissa` package - `rissa/__init__.py`
 
-### `level: int` — 1..4 maps to zstd 3,6,19,22
+### `level: int` - 1..4 maps to zstd 3,6,19,22
 Example: `rissa.compress(data, level=3)` → `level 19`.
 
-### `backend: str` — "zstd" | "lzma" | "zlib" | "huffman"
+### `backend: str` - "zstd" | "lzma" | "zlib" | "huffman"
 Example: `compress_with_dict(data, backend="zstd")`.
 
 ---
@@ -114,7 +114,7 @@ Example: `compress_with_dict(data, backend="zstd")`.
 ### `args.input`, `args.output`, `args.block`, `args.dict`
 CLI vars. Example: `rissa input.bin -o out.rissa --block 131072 --dict`.
 
-### `var_in: StringVar`, `var_out: StringVar` — GUI
+### `var_in: StringVar`, `var_out: StringVar` - GUI
 Tkinter file paths. Example: `var_in.get()` → `"C:/data.bin"`.
 
 ---

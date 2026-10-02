@@ -4,7 +4,7 @@
 
 `rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978.
 
-**Live docs → https://rissa.web.app — v4.6.3 — Apache 2.0**
+**Live docs → https://rissa.web.app - v4.6.3 - Apache 2.0**
 
 ---
 
@@ -19,12 +19,12 @@ Compressed = min_T [ Cost(T) + Cost(Model) + Cost(Data | Model) ]
 A computable approximation of MDL [Rissanen 1978]. `rissa` does not claim universal - it wins where structure exists.
 
 - Format: `MAGIC RISA v4` `.rissa` `BLOCK 1M/4M adaptive` `19T` - deterministic, versioned
-- Backends: `zstd`/`lzma`/`zlib`/`huffman` (range coder + rANS scaffolded only, not implemented — see `deep_compress/bwt_range.py:169-171`)
+- Backends: `zstd`/`lzma`/`zlib`/`huffman` (range coder + rANS scaffolded only, not implemented - see `deep_compress/bwt_range.py:169-171`)
 - Streaming: `for block in stream` without whole-file RAM
 
 ## Why it exists
 
-**The Gap:** `zstd`, `xz`, `gzip` use LZ77 + order-0 entropy. Great on text, miss math in 32-bit/64-bit time-series ints, IEEE 754 floats, sensor records. The reverse is also true: rissa's per-block design can't see redundancy spanning blocks the way LZ's whole-file window can — hence the ties on general text below.
+**The Gap:** `zstd`, `xz`, `gzip` use LZ77 + order-0 entropy. Great on text, miss math in 32-bit/64-bit time-series ints, IEEE 754 floats, sensor records. The reverse is also true: rissa's per-block design can't see redundancy spanning blocks the way LZ's whole-file window can - hence the ties on general text below.
 
 Example: `1,2,3,4` delta=1, 32-bit floats share exponent, sensor timestamps jitter -1. LZ sees nothing, `rissa` sees `DELTA_ZIGZAG` or `SHUFFLE_4`.
 
@@ -47,8 +47,8 @@ Requires `zstandard` (optional, falls back to `zlib`), Python 3.9+.
 
 ### Building the C extensions from source
 
-The hot paths (`SHUFFLE`/`BIT`/`DELTA`, 111–308× vs Python) ship as
-`rissa/c_*.c` with `setup.py` + `setup.cfg` already on main — no extra step:
+The hot paths (`SHUFFLE`/`BIT`/`DELTA`, 111-308× vs Python) ship as
+`rissa/c_*.c` with `setup.py` + `setup.cfg` already on main - no extra step:
 
 ```bash
 python setup.py build_ext --inplace   # uses setup.cfg
@@ -61,9 +61,9 @@ Run `doctor` after building: without it a broken toolchain fails
 Platform status, stated plainly: **Windows + MinGW-w64
 (`E:\w64devkit`-style layout, `compiler=mingw32`) is the tested path.**
 `setup.py` picks MSVC flags (`/O2 /arch:AVX2`) only with explicit
-`--compiler=msvc`, and portable `-O3` elsewhere — opt into CPU-specific
+`--compiler=msvc`, and portable `-O3` elsewhere - opt into CPU-specific
 `-mavx2 -march=native` with `RISSA_NATIVE=1` (local speed; never for
-published wheels — AVX2 binaries fault on older CPUs). **Linux/Mac builds are
+published wheels - AVX2 binaries fault on older CPUs). **Linux/Mac builds are
 not-yet-cross-platform** until someone verifies a build there.
 
 ## Basic usage
@@ -105,7 +105,7 @@ Honest numbers: Silesia 12-file corpus (211MB) + synthetic columnar. rissa ties 
 | Sensor 6M *(synthetic)* | 6M | 1610K | **1038K** `SHUFFLE` | **WIN -35%** |
 | 5MB `x`×5M | 5M | 620 | 924 `RAW` | +32B header |
 
-That's **11 ties + 1 real win + 2 synthetic wins**. Per-block MDL alone can't beat `xz`'s 8MB window on general text — rissa wins on bit-plane-separable and columnar data where transforms expose structure. Numbers below are v4 single-block runs (format frozen at v4); re-verified byte-identical at 4.6.1 on a 1M dickens spot-check (`310272`, `RAW`, roundtrip OK). Full tables `https://rissa.web.app/benchmarks.html` and `deep_compress/PHASE3_REPORT.md`.
+That's **11 ties + 1 real win + 2 synthetic wins**. Per-block MDL alone can't beat `xz`'s 8MB window on general text - rissa wins on bit-plane-separable and columnar data where transforms expose structure. Numbers below are v4 single-block runs (format frozen at v4); re-verified byte-identical at 4.6.1 on a 1M dickens spot-check (`310272`, `RAW`, roundtrip OK). Full tables `https://rissa.web.app/benchmarks.html` and `deep_compress/PHASE3_REPORT.md`.
 
 Reproduce:
 
@@ -117,4 +117,4 @@ python deep_compress/final_bench.py
 
 ---
 
-**License:** Apache 2.0 — See [`LICENSE`](LICENSE) — **Docs:** https://rissa.web.app
+**License:** Apache 2.0 - See [`LICENSE`](LICENSE) - **Docs:** https://rissa.web.app

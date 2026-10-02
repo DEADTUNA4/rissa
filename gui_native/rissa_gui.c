@@ -1,4 +1,4 @@
-/* rissa native GUI — Win32 C frontend, Python backend untouched.
+/* rissa native GUI - Win32 C frontend, Python backend untouched.
  *
  * Why Win32 and not OpenGL/Vulkan: for a file-compressor utility window
  * (buttons, file pickers, log view) OpenGL/Vulkan only add a GPU driver +
@@ -6,7 +6,7 @@
  * User32/GDI has zero extra DLLs and the smallest possible footprint.
  * The Python backend (tools/rissa_tool.py frozen as rissa-tool.exe, which
  * itself bundles the C kernels c_shuffle/c_bit/c_delta) is spawned as a
- * child process — not modified, not reimplemented.
+ * child process - not modified, not reimplemented.
  *
  * Build with w64devkit (GCC 16.2):
  *   E:\w64devkit\bin\gcc.exe -O2 -municode -mwindows rissa_gui.c -o rissa_gui.exe -lgdi32 -lcomdlg32 -lcomctl32
@@ -217,7 +217,7 @@ static DWORD WINAPI BackendThread(LPVOID param) {
 }
 
 static void StartBackend(const wchar_t *cmdline) {
-    if (g_running) { LogAppendW(L"[gui] busy — wait for current job\r\n"); return; }
+    if (g_running) { LogAppendW(L"[gui] busy - wait for current job\r\n"); return; }
     if (!g_backend[0]) { LogAppendW(L"[gui] backend not found (rissa-tool.exe)\r\n"); return; }
     size_t n = wcslen(cmdline) + 1;
     wchar_t *copy = (wchar_t *)malloc(n * sizeof(wchar_t));
@@ -368,7 +368,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, LPWSTR lpCmd, int nShow) {
     wc.lpszClassName = L"RissaGui";
     RegisterClassW(&wc);
 
-    HWND h = CreateWindowExW(0, L"RissaGui", L"rissa — Rissanen MDL 1978",
+    HWND h = CreateWindowExW(0, L"RissaGui", L"rissa - Rissanen MDL 1978",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT, 640, 500,
         NULL, NULL, hInst, NULL);
@@ -384,7 +384,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, LPWSTR lpCmd, int nShow) {
     /* layout: fixed positions */
     HWND hdr = CreateWindowExW(0, L"STATIC", L"rissa",
         WS_CHILD | WS_VISIBLE | SS_CENTER, 10, 6, 604, 30, h, NULL, hInst, NULL);
-    CreateWindowExW(0, L"STATIC", L"Context-Selecting Compression  |  native Win32 frontend — backend unchanged",
+    CreateWindowExW(0, L"STATIC", L"Context-Selecting Compression  |  native Win32 frontend - backend unchanged",
         WS_CHILD | WS_VISIBLE | SS_CENTER, 10, 34, 604, 18, h, NULL, hInst, NULL);
 
     CreateWindowExW(0, L"STATIC", L"Input:", WS_CHILD | WS_VISIBLE,
@@ -474,7 +474,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, LPWSTR lpCmd, int nShow) {
         LogAppendW(g_backend);
         LogAppendW(L"\r\n");
     } else {
-        SetWindowTextW(g_hStatus, L"Backend NOT FOUND — put rissa_gui.exe next to rissa-tool.exe or in gui_native/ (uses ../dist/rissa-tool.exe).");
+        SetWindowTextW(g_hStatus, L"Backend NOT FOUND - put rissa_gui.exe next to rissa-tool.exe or in gui_native/ (uses ../dist/rissa-tool.exe).");
         LogAppendW(L"[gui] backend NOT FOUND. Copy rissa_gui.exe next to rissa-tool.exe\r\n"
                    L"      or keep it in gui_native/ so ../dist/rissa-tool.exe resolves.\r\n");
     }

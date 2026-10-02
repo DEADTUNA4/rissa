@@ -114,7 +114,7 @@ def test_v4_huffman_known_failure():
         comp, hist, _ = compress_v4(data, backend='huffman', block_size=20000, use_dict=False)
         dec = decompress_v4(comp)
         if dec == data:
-            print("  FIXED — v4+huffman roundtrips now; promote to full test + close CHANGELOG entry")
+            print("  FIXED - v4+huffman roundtrips now; promote to full test + close CHANGELOG entry")
             return "fixed"
         else:
             print("  UNEXPECTED: decoded without error but mismatch")

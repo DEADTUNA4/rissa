@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-// Pure C SHUFFLE stride-4 — 5 int ops, uint8, AVX2-ready
+// Pure C SHUFFLE stride-4 - 5 int ops, uint8, AVX2-ready
 // rissa input: row-major interleaved [a0,b0,c0,d0, a1,b1,c1,d1, ...]
 // output: col-major [a0,a1,..., b0,b1,..., c0,c1,..., d0,d1,...]
 // Matches transforms_v2.py shuffle_encode stride=4

@@ -1,14 +1,14 @@
-/* rissa Huffman bit-packing — w64devkit GCC 16.2, pure C.
+/* rissa Huffman bit-packing - w64devkit GCC 16.2, pure C.
  *
  * The slow part of deep_compress/huffman.py is per-bit Python: building a
  * '0'/'1' str per byte ("".join over the whole block) and walking the tree
  * one CHARACTER at a time on decode. Tree construction (256 symbols) stays
- * in Python — zero divergence risk. These two helpers take the already-built
+ * in Python - zero divergence risk. These two helpers take the already-built
  * `codes` (list of 256 '0'/'1' strs, "" for absent) and do the bit loops.
  *
  * pack(data, codes) -> (encoded: bytes, padding: int)
  * unpack(encoded, codes, padding, original_len) -> bytes
- * Bit order MSB-first, zero padding — identical to the Python version.
+ * Bit order MSB-first, zero padding - identical to the Python version.
  */
 #include <Python.h>
 #include <stdint.h>

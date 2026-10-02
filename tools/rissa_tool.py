@@ -59,7 +59,7 @@ def log_path():
 def report_bug(msg):
     """Log an error and tell the user exactly where to paste it."""
     get_logger().error(msg)
-    return f"Logged to {log_path()} — paste it on Discord: {DISCORD_URL}"
+    return f"Logged to {log_path()} - paste it on Discord: {DISCORD_URL}"
 
 def _excepthook(typ, val, tb):
     try:

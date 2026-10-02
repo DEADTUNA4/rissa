@@ -1,5 +1,5 @@
 """
-rissa — https://rissa.web.app
+rissa - https://rissa.web.app
 import rissa; rissa.compress(data, level=3)
 """
 __version__ = "4.6.3"

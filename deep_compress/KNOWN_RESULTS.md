@@ -1,8 +1,8 @@
-# Known Results — rissa Single Source of Truth
+# Known Results - rissa Single Source of Truth
 
-**Updated: 2026-09-04 — v4.6.1 — Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
+**Updated: 2026-09-04 - v4.6.1 - Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
 
-This is the standing table — win/tie/loss per file type, updated as we go. Do not re-derive from chat history.
+This is the standing table - win/tie/loss per file type, updated as we go. Do not re-derive from chat history.
 
 | File | Type | Size | xz -9 | rissa v4.4 single | Result | Transform | Notes |
 |------|------|------|-------|-------------------|--------|-----------|-------|
@@ -16,7 +16,7 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 | `samba` | exe | 21M | 3675K | 3675K | tie | `RAW` | |
 | `sao` | image? | 7M | 4312K | 4312K | tie | `RAW` | |
 | `webster` | text | 40M | 8189K | 8189K | tie | `RAW` | |
-| **`x-ray`** | **16-bit medical image** | **8.2M** | **4385K** | **4212K** | **WIN -3.9%** | `BIT_PLANE` / `SHUFFLE4_DELTA` 503K vs RAW 536K on 1M | **Only win — bit-plane separable, not columnar/sensor/JSON** |
+| **`x-ray`** | **16-bit medical image** | **8.2M** | **4385K** | **4212K** | **WIN -3.9%** | `BIT_PLANE` / `SHUFFLE4_DELTA` 503K vs RAW 536K on 1M | **Only win - bit-plane separable, not columnar/sensor/JSON** |
 | `xml` | structured text | 5.2M | 443K | 443K | tie | `RAW` | |
 
 **Other corpora (available `deep_compress/corpora`):**
@@ -34,14 +34,14 @@ This is the standing table — win/tie/loss per file type, updated as we go. Do 
 
 **Reframed target (was "structured/sensor/log columnar"):**
 
-> **Actual evidence:** **1 real win** `x-ray` `BIT_PLANE -3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** — `nci` is **tie** `RAW` full 18/18. **RACD: tested and ruled out on real text data. Its apparent win throughout development was caused by whitespace-normalization correctness bug; once fixed to `re.split(b'(\\s+)')` preserving `32` cols, `RACD` `95,160` vs `65,536` raw `+45%` and `7421` vs `3965` lose. Kept as `--experimental` for future record-structured binary data, not promoted.** **Truer claim:** `rissa` wins on **bit-plane separable** (`x-ray`) and ties on general structured — next lever is `SHUFFLE` stride detection on real columnar.
+> **Actual evidence:** **1 real win** `x-ray` `BIT_PLANE -3.9%` + **2 synthetic wins** columnar `-80%` **(synthetic)** / sensor `-35%` **(synthetic)** - `nci` is **tie** `RAW` full 18/18. **RACD: tested and ruled out on real text data. Its apparent win throughout development was caused by whitespace-normalization correctness bug; once fixed to `re.split(b'(\\s+)')` preserving `32` cols, `RACD` `95,160` vs `65,536` raw `+45%` and `7421` vs `3965` lose. Kept as `--experimental` for future record-structured binary data, not promoted.** **Truer claim:** `rissa` wins on **bit-plane separable** (`x-ray`) and ties on general structured - next lever is `SHUFFLE` stride detection on real columnar.
 
-> **Backend-settings correction (v4.6.1, see problem.md #27):** rissa's lzma path uses `preset 9|PRESET_EXTREME` while published `xz -9` baselines use plain `preset=9`. Controlled same-input split: nci-1M's -6.16% is 100% flag effect — reclassified as tie (fair baseline `xz -9e` gives +32B tie). At same preset, transform-confirmed and reversible-verified: xml-1M `BWT_SUBBLOCK` -4.05%, x-ray-1M `SHUFFLE_2` -10.68%, sensor `SHUFFLE_8` -47.9%, columnar `SHUFFLE4_DELTA` -97.4%. Sample-level supporting evidence only — no full-file promotions; `nci`/`xml` full-file rows above stand as ties.
+> **Backend-settings correction (v4.6.1, see problem.md #27):** rissa's lzma path uses `preset 9|PRESET_EXTREME` while published `xz -9` baselines use plain `preset=9`. Controlled same-input split: nci-1M's -6.16% is 100% flag effect - reclassified as tie (fair baseline `xz -9e` gives +32B tie). At same preset, transform-confirmed and reversible-verified: xml-1M `BWT_SUBBLOCK` -4.05%, x-ray-1M `SHUFFLE_2` -10.68%, sensor `SHUFFLE_8` -47.9%, columnar `SHUFFLE4_DELTA` -97.4%. Sample-level supporting evidence only - no full-file promotions; `nci`/`xml` full-file rows above stand as ties.
 
-**Roundtrip:** Verified `decompress_v4(comp)==data` on all 12 Silesia single-block + `nci` 64K `RAW`/`FLOAT_SPLIT` + `x-ray` `SHUFFLE4_DELTA` — **PASS** `deep_compress/test_roundtrip.py`.
+**Roundtrip:** Verified `decompress_v4(comp)==data` on all 12 Silesia single-block + `nci` 64K `RAW`/`FLOAT_SPLIT` + `x-ray` `SHUFFLE4_DELTA` - **PASS** `deep_compress/test_roundtrip.py`.
 
-**MDL cost dump `nci` 64K:** `RAW 3965` < `BWT 4525` < `SHUFFLE 4666` < `FLOAT_SPLIT 5674` — **RAW genuinely wins, not threshold**. `FLOAT_SPLIT` tried on `nci` 64K `5674` vs `RAW` `3965` lose, confirmed.
+**MDL cost dump `nci` 64K:** `RAW 3965` < `BWT 4525` < `SHUFFLE 4666` < `FLOAT_SPLIT 5674` - **RAW genuinely wins, not threshold**. `FLOAT_SPLIT` tried on `nci` 64K `5674` vs `RAW` `3965` lose, confirmed.
 
-**Hold off:** `SA-IS` 1M+ BWT, `BWT_SUBBLOCK` as default, custom `rANS` backend — all gated, not default, until Silesia thesis validated (now 1 win / 11 ties, not `beats xz`).
+**Hold off:** `SA-IS` 1M+ BWT, `BWT_SUBBLOCK` as default, custom `rANS` backend - all gated, not default, until Silesia thesis validated (now 1 win / 11 ties, not `beats xz`).
 
-**Next cheapest:** `nci` dump already shows `RAW` wins — `SA-IS` won't change `nci` (BWT already loses at 64K), so **don't invest in SA-IS until MDL dump shows `BWT` near `RAW`**. Instead, auto stride detection for `SHUFFLE`/`FLOAT_SPLIT`.
+**Next cheapest:** `nci` dump already shows `RAW` wins - `SA-IS` won't change `nci` (BWT already loses at 64K), so **don't invest in SA-IS until MDL dump shows `BWT` near `RAW`**. Instead, auto stride detection for `SHUFFLE`/`FLOAT_SPLIT`.

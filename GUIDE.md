@@ -1,6 +1,8 @@
-# Guide — How to use rissa
+# Guide - How to use rissa
 
-**https://rissa.web.app — v4.4 — `pip install rissa-compress`**
+**https://rissa.web.app - `pip install rissa-compress`**
+
+Three layers: **public API** (`rissa.compress`/`rissa.decompress` below - stable, writes the v3 container) · **containers** (v3 default, v4 for large-file/LZMA via `deep_compress.compressor_v4`, both always decode) · **internals** (`deep_compress.*` escape hatches). Full layer map: `DEVELOPER.md`.
 
 ## How to use
 
@@ -60,7 +62,7 @@ python -c "from deep_compress.compressor_v3 import compress_stream, decompress_s
 | >50MB arch | `4M` + `use_two_pass=True` | Larger window (64M dict) helps, sub-block BWT still 256K |
 | Small <1KB | any | Header dominates, rissa falls back to RAW |
 
-`header 512B at 16K =3% → 0.4% at 128K → 0.05% at 1M` — v4 adaptive does `<=4M → single` automatically.
+`header 512B at 16K =3% → 0.4% at 128K → 0.05% at 1M` - v4 adaptive does `<=4M → single` automatically.
 
 ## Streaming
 
@@ -72,9 +74,9 @@ with open('big.rissa','rb') as fin, open('big.out','wb') as fout:
     decompress_stream(fin, fout)
 ```
 
-`for block in stream` without whole-file RAM. `xor_prev_block` disabled in parallel/streaming (loud check in `compressor_v4.py`) — use sequential for that transform.
+`for block in stream` without whole-file RAM. `xor_prev_block` disabled in parallel/streaming (loud check in `compressor_v4.py`) - use sequential for that transform.
 
-Memory contract: `compress_stream`/`decompress_stream` hold O(block_size) plus one shared dict at most (measured peak RSS 134–154MB is the *whole-file* API holding input+output+contexts; streaming stays near block_size + backend window). The `rissa` CLI without `--stream` reads the whole input into memory first — for files larger than RAM always use `--stream` (or the `*_stream` API). No explicit `--max-mem` flag: block_size IS the memory knob (64K–128K default, 1M/4M for arch).
+Memory contract: `compress_stream`/`decompress_stream` hold O(block_size) plus one shared dict at most (measured peak RSS 134-154MB is the *whole-file* API holding input+output+contexts; streaming stays near block_size + backend window). The `rissa` CLI without `--stream` reads the whole input into memory first - for files larger than RAM always use `--stream` (or the `*_stream` API). No explicit `--max-mem` flag: block_size IS the memory knob (64K-128K default, 1M/4M for arch).
 
 ## Python API details
 

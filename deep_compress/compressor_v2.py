@@ -6,6 +6,10 @@ Compressor v2: Per-block MDL-gated Transform Search with expanded candidates
 """
 import struct
 try:
+    from .errors import FormatError, TruncatedError
+except ImportError:
+    from errors import FormatError, TruncatedError
+try:
     from .transforms_v2 import TRANSFORMS_V2
 except ImportError:
     from transforms_v2 import TRANSFORMS_V2
@@ -145,26 +149,26 @@ def decompress_with_backend(data: bytes):
     except:
         has_zstd=False
     if not data.startswith(MAGIC):
-        raise ValueError("bad magic")
+        raise FormatError("bad magic")
     pos=4
     def _need(n, what):
         nonlocal pos
         chunk = data[pos:pos+n]
         if len(chunk) < n:
-            raise EOFError(f"truncated v2 .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
+            raise TruncatedError(f"truncated v2 .rissa file: {what} needs {n}B at offset {pos}, file ends at {len(data)}B")
         pos += n
         return chunk
     version=_need(1, "version")[0]
     if version != 2:
-        raise ValueError(f"v2 decoder got version {version} (use the matching decompressor)")
+        raise FormatError(f"v2 decoder got version {version} (use the matching decompressor)")
     backend_id=_need(1, "backend id")[0]
     try:
         backend={0:"huffman",1:"zlib",2:"lzma",3:"zstd"}[backend_id]
     except KeyError:
-        raise ValueError(f"invalid backend id {backend_id} (expected 0-3)")
+        raise FormatError(f"invalid backend id {backend_id} (expected 0-3)")
     num_blocks=struct.unpack(">I", _need(4, "block count"))[0]
     if num_blocks > 100000:
-        raise ValueError(f"implausible block count {num_blocks} (file likely corrupt)")
+        raise FormatError(f"implausible block count {num_blocks} (file likely corrupt)")
     block_size=struct.unpack(">I", _need(4, "block size"))[0]
     out=bytearray()
     for bi in range(num_blocks):
@@ -172,7 +176,7 @@ def decompress_with_backend(data: bytes):
         extra_len=_need(1, f"block {bi} extra length")[0]
         orig_len=struct.unpack(">H", _need(2, f"block {bi} orig length"))[0]
         if tid not in TRANSFORMS_V2:
-            raise ValueError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
+            raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="huffman":
             padding=_need(1, f"block {bi} huffman padding")[0]

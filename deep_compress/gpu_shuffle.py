@@ -1,12 +1,12 @@
 """
-GPU SHUFFLE stride-4 — v4.6.0 first, plays to GTX 1050 Ti strengths
+GPU SHUFFLE stride-4 - v4.6.0 first, plays to GTX 1050 Ti strengths
 Pascal 6.1, CUDA, CuPy optional with CPU fallback
 Batched: one kernel for all blocks, not per-block
 """
 import sys
 
 def shuffle_cpu(data: bytes, stride=4):
-    """Pure Python fallback — same as transforms_v2"""
+    """Pure Python fallback - same as transforms_v2"""
     n=len(data)
     if n < stride*2:
         return data
