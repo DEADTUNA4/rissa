@@ -1,17 +1,23 @@
-import sys, platform
+import sys, os, platform
 from setuptools import setup, Extension
 
-# Platform-conditional flags. Windows/MinGW numbers (-O3 -mavx2 -march=native
-# = 141-308x wins) were measured with w64devkit GCC 16.2 on x86-64.
-# MSVC uses /O2 /arch:AVX2. Non-x86 gets plain -O3 (no AVX2 assumptions).
+# Portable baseline by default; CPU-specific speed via RISSA_NATIVE=1.
+# -march=native / -mavx2 can emit instructions (AVX2) that fault with
+# "illegal instruction" on older/distribution machines, so published wheels
+# must use the portable baseline. The 141-308x wins were measured with
+# w64devkit GCC 16.2 on x86-64 with RISSA_NATIVE=1.
+# MSVC path (/O2 /arch:AVX2) only with explicit --compiler=msvc (opt-in).
+_native = os.environ.get("RISSA_NATIVE") == "1"
 _args = " ".join(sys.argv)
 if "--compiler=msvc" in _args or "msvc" in _args:
-    compile_args = ['/O2', '/arch:AVX2']  # explicit MSVC path
+    compile_args = ['/O2', '/arch:AVX2']  # explicit MSVC path (opt-in)
 elif sys.platform == "win32":
-    compile_args = ['-O3', '-mavx2', '-march=native']  # MinGW path, see setup.cfg
+    compile_args = ['-O3']  # MinGW path, see setup.cfg; portable baseline
+    if _native:
+        compile_args += ['-mavx2', '-march=native']
 else:
     compile_args = ['-O3']
-    if platform.machine().lower() in ("x86_64", "amd64"):
+    if _native and platform.machine().lower() in ("x86_64", "amd64"):
         compile_args += ['-mavx2', '-march=native']
 
 # NOTE: rissa.arrow_glue lives on draft/pyarrow-codec only (C++ PR track)

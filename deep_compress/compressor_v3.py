@@ -6,6 +6,10 @@ Compressor v3: Phase 1 Architecture Upgrades
 """
 import struct, os
 try:
+    from .diag import note
+except ImportError:
+    from diag import note
+try:
     from .transforms_v2 import TRANSFORMS_V2, HAS_C_TRANS
 except ImportError:
     from transforms_v2 import TRANSFORMS_V2, HAS_C_TRANS
@@ -81,30 +85,50 @@ def _eval_block_v3(block: bytes, backend: str, level, has_zstd: bool, zstd_dict,
     if fast and backend in ("lzma", "zstd") and tids:
         tcache = {}
         scored = []
+        # Screen estimator: same-family fast level (zstd-1) predicts the true
+        # backend far better than zlib-1 (56-block panel: top-3 misses 4/56
+        # either way, but zstd-1 >= zlib-1 on every corpus and hits lzma-9
+        # winners zlib-1 misses). Falls back to zlib-1 without zstandard.
+        zc1 = None
+        if has_zstd:
+            try:
+                import zstandard as _zstd
+                zc1 = _zstd.ZstdCompressor(level=1)
+            except Exception as e:
+                note("v3-screen zstd-1 setup", e)
+                zc1 = None
         for tid in tids:
             name, enc, dec = TRANSFORMS_V2[tid]
             if tid in [5, 12] and len(block) > 2048: continue
             try:
                 transformed, extra = enc(block)
-            except:
+            except Exception as e:
+                note(f"v3-screen {name}", e)
                 continue
             if transformed is None: continue
             tcache[tid] = (transformed, extra)
             try:
-                screen = len(zlib.compress(transformed, 1)) + 1 + len(extra)
-            except:
+                if zc1 is not None:
+                    screen = len(zc1.compress(transformed)) + 1 + len(extra)
+                else:
+                    screen = len(zlib.compress(transformed, 1)) + 1 + len(extra)
+            except Exception as e:
+                note(f"v3-screen estimate {name}", e)
                 continue
             scored.append((screen, tid))
         if scored:
             scored.sort(key=lambda t: (t[0], t[1]))
-            keep = {tid for _, tid in scored[:3]} | ({0} if 0 in tcache else set())
+            # Top-4 (was top-3): panel misses drop 4/56 -> 2/56 (xml only),
+            # one extra full encode per block for measurably better winners.
+            keep = {tid for _, tid in scored[:4]} | ({0} if 0 in tcache else set())
             for tid in tids:
                 if tid not in keep: continue
                 name, enc, dec = TRANSFORMS_V2[tid]
                 transformed, extra = tcache[tid]
                 try:
                     payload, size = _encode_with_backend(transformed, backend, level, has_zstd, zstd_dict)
-                except:
+                except Exception as e:
+                    note(f"v3-backend {name}/{backend}", e)
                     continue
                 total = size + 1 + len(extra)
                 if total < best_size:
@@ -173,7 +197,8 @@ def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
     try:
         import rissa.c_stat as _CS
         common = _CS.rank_ngrams(bytes(sample), 6, 3, 4096)[:2048]
-    except:
+    except Exception as e:
+        note("shared-dict ngrams", e)
         try:
             from collections import Counter
             counter = Counter()
@@ -181,20 +206,22 @@ def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
                 counter[sample[i:i+6]] += 1
             # most common that appear >=3
             common = [k for k,v in counter.most_common(4096) if v>=3][:2048]
-        except:
+        except Exception as e2:
+            note("shared-dict counter", e2)
             return None
     try:
         # pack as dict: join with 0 separator, truncate to dict_size
         db = b'\x00'.join(common)[:dict_size]
         return db if len(db) > 256 else None
-    except:
+    except Exception as e:
+        note("shared-dict pack", e)
         return None
 
 def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_SIZE_64K, use_dict=True, fast=False, max_workers=None):
     """
     Per-block MDL + shared dict header. Dict is stored once in file header and used for all blocks via zstd dict.
     Returns (compressed_bytes, hist, dict_bytes)
-    fast=True: two-stage MDL (zlib-1 screen -> full encode of top-3 + RAW) and
+    fast=True: two-stage MDL (zstd-1 screen -> full encode of top-4 + RAW) and
     skip BWT-family transform computation. ~10x faster on structured data;
     winners verified identical on sensor/columnar samples. Default False keeps
     exhaustive search (published benchmark numbers).
@@ -206,7 +233,7 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
     try:
         import zstandard as zstd
         has_zstd=True
-    except:
+    except Exception:
         has_zstd=False
 
     if backend=="zstd" and level is None: level=19
@@ -220,7 +247,9 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
     if dict_bytes and has_zstd:
         try:
             zstd_dict = zstd.ZstdCompressionDict(dict_bytes)
-        except: zstd_dict=None
+        except Exception as e:
+            note("v3 zstd dict compile", e)
+            zstd_dict=None
         # quick MDL check: estimate total with vs without dict on first block sample
         # If dict doesn't save at least its own size, disable it
         if len(data) > 0:
@@ -233,7 +262,8 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
                     # dict not worth it, disable
                     dict_bytes = None
                     zstd_dict = None
-            except:
+            except Exception as e:
+                note("v3 dict MDL gate", e)
                 pass
 
     n=len(data)
@@ -267,6 +297,8 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
     else:
         results = [_eval_block_v3(b, backend, level, has_zstd, zstd_dict, fast) for b in blocks]
     for block, (best_tid, best_extra, best_payload, best_name) in zip(blocks, results):
+        if len(best_extra) > 255:
+            raise ValueError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
         chosen.append(best_name)
         out.append(best_tid)
         out.append(len(best_extra))

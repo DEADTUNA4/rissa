@@ -74,6 +74,8 @@ with open('big.rissa','rb') as fin, open('big.out','wb') as fout:
 
 `for block in stream` without whole-file RAM. `xor_prev_block` disabled in parallel/streaming (loud check in `compressor_v4.py`) — use sequential for that transform.
 
+Memory contract: `compress_stream`/`decompress_stream` hold O(block_size) plus one shared dict at most (measured peak RSS 134–154MB is the *whole-file* API holding input+output+contexts; streaming stays near block_size + backend window). The `rissa` CLI without `--stream` reads the whole input into memory first — for files larger than RAM always use `--stream` (or the `*_stream` API). No explicit `--max-mem` flag: block_size IS the memory knob (64K–128K default, 1M/4M for arch).
+
 ## Python API details
 
 - `rissa.compress(data, level=3, block_size=65536, backend="zstd", use_dict=False)` → `bytes` with `MAGIC RISA`

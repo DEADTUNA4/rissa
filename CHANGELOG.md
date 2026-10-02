@@ -2,7 +2,18 @@
 
 **https://rissa.web.app — Apache 2.0 — `rissa-compress`**
 
-## v4.6.2 — 2026-10-01 — C ports, import fix, screening, v3 parallelism, audit fixes
+## v4.6.3 — 2026-10-01 — v4.6.2 checklist: dead pool, strict errors, v4 unification, portable builds, screening evidence, rigorous bench
+
+0. **Dead ProcessPoolExecutor removed (v4):** the parallel branch spawned a process pool then ran everything in a nested ThreadPool — the processes sat idle while adding Windows spawn + memory overhead. ThreadPool-only now.
+1. **Targeted exceptions + `RISSA_STRICT`:** 0 bare `except:` remain in compressor/transform code (was 21). Skipped candidates are logged via `deep_compress/diag.py`; `RISSA_STRICT=1` re-raises immediately (verified: real error re-raised, clean pipeline silent).
+2. **v4 serial/parallel unified:** one `_eval_block_v4` + one `_write_block_v4` (mirrors v3's `_eval_block_v3`). Parallel adopts the serial policy (xz-matched presets, BIT_PLANE test) — FITS lzma 3,248,244 → 3,245,375 (−2.9KB, intended convergence); all serial reference SHAs byte-identical. Dead per-block `cache`, `shannon`, and order-1 no-op probe removed.
+3. **Portable builds:** default `-O3` (no AVX2); `RISSA_NATIVE=1` opts into `-mavx2 -march=native`. Both paths verified compiling. README documents the split (never ship AVX2 wheels).
+4. **Metadata validation:** v3/v4 writers refuse `extra > 255B` loudly (v2/stream already fail via `append`); malformed-stream hardening from the audit batch stands.
+5. **Randomized C-vs-Python suite** (`deep_compress/test_c_equivalence.py`, in-repo): all transforms over randomized inputs + boundaries (258/259/260 zero-runs, 65535/65536 runs, stride edges, BWT periodics, bad primaries/padding → same `ValueError` both modes). Green.
+6. **Screening measured, then fixed:** 56-block panel showed top-3/zlib-1 missing the true best 4/56 (xml). Screen upgraded to same-family zstd-1 + top-4 (misses 2/56, xml-only, documented). Re-verified byte-identical fast==exhaustive on 4 corpora at 2.6–4× speedup.
+7. **Rigorous bench** (`deep_compress/bench_463.py --reps`): median/stdev, peak RSS (ctypes, fixed handle-truncation bug), CPU%, per-run xz baselines (machine drift observed at 3.5× between sessions — ratios only vs same-run baselines), determinism assert, JSONL. Split: transforms 1.7–2.7% of wall, backends 97%+. Peak RSS 134–154MB whole-file; CPU ~85% single-block, ~350% file-level parallel.
+   Measured (3 reps, med ± stdev s): columnar 14.22±0.24, fits-4M fast 5.48±0.34, sensor 7.25±0.55, dickens 26.19±1.58, nci 25.72±0.47, x-ray 21.01±0.13, xml 19.03±2.70; decomp 0.02–0.08s throughout. Sizes identical to v4.6.1/v4.6.2 everywhere (determinism asserted per rep).
+- **Considered and declined:** GIL release in C loops (transforms <2% of wall — no measurable gain; recorded), MTF Fenwick / SA-IS / order-1 / GPU (unchanged reasons).
 
 All 10 findings verified in code, all fixed, all regression-tested (`test_audit_regressions` in `test_roundtrip.py`; suite banner now distinguishes PASS / KNOWN-FAILURE / UNEXPECTED for CI).
 

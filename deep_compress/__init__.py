@@ -1,5 +1,5 @@
 """rissa v4.3 - https://rissa.web.app"""
-__version__ = "4.6.2"
+__version__ = "4.6.3"
 import sys, os
 _p = os.path.normpath(os.path.dirname(os.path.abspath(__file__)))
 if _p not in sys.path:

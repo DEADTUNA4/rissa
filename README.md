@@ -4,7 +4,7 @@
 
 `rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978.
 
-**Live docs → https://rissa.web.app — v4.6.2 — Apache 2.0**
+**Live docs → https://rissa.web.app — v4.6.3 — Apache 2.0**
 
 ---
 
@@ -61,8 +61,9 @@ Run `doctor` after building: without it a broken toolchain fails
 Platform status, stated plainly: **Windows + MinGW-w64
 (`E:\w64devkit`-style layout, `compiler=mingw32`) is the tested path.**
 `setup.py` picks MSVC flags (`/O2 /arch:AVX2`) only with explicit
-`--compiler=msvc`, and plain `-O3` (+AVX2 on x86-64) elsewhere — but
-**Linux/Mac builds are untested, so treat non-Windows as
+`--compiler=msvc`, and portable `-O3` elsewhere — opt into CPU-specific
+`-mavx2 -march=native` with `RISSA_NATIVE=1` (local speed; never for
+published wheels — AVX2 binaries fault on older CPUs). **Linux/Mac builds are
 not-yet-cross-platform** until someone verifies a build there.
 
 ## Basic usage

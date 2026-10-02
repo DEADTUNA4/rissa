@@ -3,29 +3,33 @@ Layer 1: Expanded Reversible Transform Search - per-block MDL gated
 Adds: delta-of-delta, standalone MTF, byte-shuffle/transpose for structured records
 """
 import struct
+try:
+    from .diag import note
+except ImportError:
+    from diag import note
 
 # Try pure C hot paths (141x SHUFFLE, 308x BIT, 111x DELTA) via w64devkit GCC 16.2, fallback to Python
 try:
     import rissa.c_shuffle
     HAS_C_SHUFFLE=True
-except: HAS_C_SHUFFLE=False
+except Exception: HAS_C_SHUFFLE=False
 try:
     import rissa.c_bit
     HAS_C_BIT=True
-except: HAS_C_BIT=False
+except Exception: HAS_C_BIT=False
 try:
     import rissa.c_delta
     HAS_C_DELTA=True
-except: HAS_C_DELTA=False
+except Exception: HAS_C_DELTA=False
 try:
     import rissa.c_trans
     HAS_C_TRANS=True
-except: HAS_C_TRANS=False
+except Exception: HAS_C_TRANS=False
 
 def delta_encode(data: bytes) -> bytes:
     if HAS_C_DELTA:
         try: return rissa.c_delta.delta(data)
-        except: pass
+        except Exception as _e: note("delta_encode", _e)
     if not data:
         return b""
     out = bytearray(len(data))
@@ -37,7 +41,7 @@ def delta_encode(data: bytes) -> bytes:
 def delta_decode(data: bytes) -> bytes:
     if HAS_C_DELTA:
         try: return rissa.c_delta.delta_decode(data)
-        except: pass
+        except Exception as _e: note("delta_decode", _e)
     if not data:
         return b""
     out = bytearray(len(data))
@@ -50,7 +54,7 @@ def delta2_encode(data: bytes) -> bytes:
     """Double delta - good for linear ramps / sensor data"""
     if HAS_C_TRANS:
         try: return rissa.c_trans.delta2(data)
-        except: pass
+        except Exception as _e: note("delta2_encode", _e)
     if len(data) < 2:
         return data
     # first delta, then delta again
@@ -66,7 +70,7 @@ def delta2_encode(data: bytes) -> bytes:
 def delta2_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.delta2_decode(data)
-        except: pass
+        except Exception as _e: note("delta2_decode", _e)
     if len(data) < 2:
         return data
     # inverse: first recover d1, then recover original
@@ -80,7 +84,7 @@ def delta2_decode(data: bytes) -> bytes:
 def xor_encode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.xor_enc(data)
-        except: pass
+        except Exception as _e: note("xor_encode", _e)
     if not data:
         return b""
     out = bytearray(len(data))
@@ -92,7 +96,7 @@ def xor_encode(data: bytes) -> bytes:
 def xor_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.xor_dec(data)
-        except: pass
+        except Exception as _e: note("xor_decode", _e)
     if not data:
         return b""
     out = bytearray(len(data))
@@ -104,7 +108,7 @@ def xor_decode(data: bytes) -> bytes:
 def bwt_encode(data: bytes):
     if HAS_C_TRANS:
         try: return rissa.c_trans.bwt_encode(data)
-        except: pass
+        except Exception as _e: note("bwt_encode", _e)
     n = len(data)
     if n==0:
         return b"", 0
@@ -140,7 +144,7 @@ def bwt_encode(data: bytes):
         # Find primary where rotation == data (i==0)
         try:
             primary = suffixes.index(0)
-        except:
+        except ValueError:
             primary = 0
         # Build BWT: char before each rotation
         bwt = bytearray(n)
@@ -152,7 +156,7 @@ def bwt_encode(data: bytes):
     sorted_rots = sorted(rotations)
     try:
         primary = sorted_rots.index(data)
-    except:
+    except ValueError:
         primary = 0
     bwt = bytes(r[-1] for r in sorted_rots)
     return bwt, primary
@@ -160,7 +164,7 @@ def bwt_encode(data: bytes):
 def bwt_decode_fast(bwt: bytes, primary: int) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.bwt_decode(bwt, primary)
-        except: pass
+        except Exception as _e: note("bwt_decode_fast", _e)
     n = len(bwt)
     if n and not (0 <= primary < n):
         raise ValueError(f"BWT primary {primary} out of range for length {n}")
@@ -190,7 +194,7 @@ def bwt_decode_fast(bwt: bytes, primary: int) -> bytes:
 def mtf_encode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.mtf(data)
-        except: pass
+        except Exception as _e: note("mtf_encode", _e)
     alphabet = list(range(256))
     out = bytearray()
     for c in data:
@@ -203,7 +207,7 @@ def mtf_encode(data: bytes) -> bytes:
 def mtf_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.mtf_decode(data)
-        except: pass
+        except Exception as _e: note("mtf_decode", _e)
     alphabet = list(range(256))
     out = bytearray()
     for idx in data:
@@ -224,10 +228,10 @@ def shuffle_encode(data: bytes, stride: int) -> bytes:
     """
     if HAS_C_SHUFFLE and stride==4:
         try: return rissa.c_shuffle.shuffle(data, stride)
-        except: pass
+        except Exception as _e: note("shuffle_encode", _e)
     if HAS_C_TRANS:
         try: return rissa.c_trans.shuffle(data, stride)
-        except: pass
+        except Exception as _e: note("shuffle_encode", _e)
     n = len(data)
     if n < stride*2:
         return data
@@ -248,7 +252,7 @@ def shuffle_encode(data: bytes, stride: int) -> bytes:
 def shuffle_decode(data: bytes, stride: int) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.shuffle_decode(data, stride)
-        except: pass
+        except Exception as _e: note("shuffle_decode", _e)
     n = len(data)
     if n < stride*2:
         return data
@@ -295,7 +299,7 @@ def zigzag_encode(data: bytes) -> bytes:
     """Delta + zigzag: maps signed -128..127 to 0..255 small magnitude = small value. cf. Gorilla/Prometheus"""
     if HAS_C_DELTA:
         try: return rissa.c_delta.zigzag(data)
-        except: pass
+        except Exception as _e: note("zigzag_encode", _e)
     if not data:
         return b""
     out = bytearray(len(data))
@@ -310,7 +314,7 @@ def zigzag_encode(data: bytes) -> bytes:
 def zigzag_decode(data: bytes) -> bytes:
     if HAS_C_DELTA:
         try: return rissa.c_delta.zigzag_decode(data)
-        except: pass
+        except Exception as _e: note("zigzag_decode", _e)
     if not data:
         return b""
     out = bytearray(len(data))
@@ -325,7 +329,7 @@ def zigzag_decode(data: bytes) -> bytes:
 def delta2_zigzag_encode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.d2zz(data)
-        except: pass
+        except Exception as _e: note("delta2_zigzag_encode", _e)
     if len(data) < 2:
         return data
     d1 = delta_encode(data)
@@ -342,7 +346,7 @@ def delta2_zigzag_encode(data: bytes) -> bytes:
 def delta2_zigzag_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.d2zz_decode(data)
-        except: pass
+        except Exception as _e: note("delta2_zigzag_decode", _e)
     if len(data)<2:
         return data
     d1 = bytearray(len(data))
@@ -359,7 +363,7 @@ def order2_encode(data: bytes) -> bytes:
     """Second-order predictor: predict x[n] = 2*x[n-1] - x[n-2]. Good for text-like."""
     if HAS_C_TRANS:
         try: return rissa.c_trans.order2(data)
-        except: pass
+        except Exception as _e: note("order2_encode", _e)
     if len(data)<2:
         return data
     out=bytearray(len(data))
@@ -373,7 +377,7 @@ def order2_encode(data: bytes) -> bytes:
 def order2_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.order2_decode(data)
-        except: pass
+        except Exception as _e: note("order2_decode", _e)
     if len(data)<2:
         return data
     out=bytearray(len(data))
@@ -388,7 +392,7 @@ def rle_zero_encode(data: bytes) -> bytes:
     """RLE of zeros after MTF: 4-zero marker, unambiguous. Encodes runs >=4 as [0,0,0,0, N-4]"""
     if HAS_C_TRANS:
         try: return rissa.c_trans.rle_zero(data)
-        except: pass
+        except Exception as _e: note("rle_zero_encode", _e)
     if not data:
         return b""
     out=bytearray()
@@ -414,7 +418,7 @@ def rle_zero_encode(data: bytes) -> bytes:
 def rle_zero_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.rle_zero_decode(data)
-        except: pass
+        except Exception as _e: note("rle_zero_decode", _e)
     out=bytearray()
     i=0
     n=len(data)
@@ -432,7 +436,7 @@ def rle_zero_decode(data: bytes) -> bytes:
 def rle_encode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.rle(data)
-        except: pass
+        except Exception as _e: note("rle_encode", _e)
     import struct
     from itertools import groupby
     out = bytearray()
@@ -447,7 +451,7 @@ def rle_encode(data: bytes) -> bytes:
 def rle_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.rle_decode(data)
-        except: pass
+        except Exception as _e: note("rle_decode", _e)
     import struct
     out = bytearray()
     for i in range(0, len(data) - len(data) % 3, 3):
@@ -458,7 +462,7 @@ def float_split_encode(data: bytes) -> bytes:
     """Float-aware: split IEEE754 32-bit floats into 4 streams. cf. Gorilla. Only if len%4==0 and looks like floats"""
     if HAS_C_TRANS:
         try: return rissa.c_trans.float_split(data)
-        except: pass
+        except Exception as _e: note("float_split_encode", _e)
     if len(data)<8 or len(data)%4!=0:
         return data
     # Heuristic: check if data could be floats (exponent not all zero/255)
@@ -475,7 +479,7 @@ def float_split_encode(data: bytes) -> bytes:
 def float_split_decode(data: bytes) -> bytes:
     if HAS_C_TRANS:
         try: return rissa.c_trans.float_split_decode(data)
-        except: pass
+        except Exception as _e: note("float_split_decode", _e)
     if len(data)<8 or len(data)%4!=0:
         return data
     n=len(data)//4
@@ -496,7 +500,7 @@ def bit_transpose_encode(data: bytes, width=4) -> bytes:
     """
     if HAS_C_BIT:
         try: return rissa.c_bit.bit_transpose(data)
-        except: pass
+        except Exception as _e: note("bit_transpose_encode", _e)
     if len(data) < 8:
         return data
     out=bytearray(len(data))

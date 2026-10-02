@@ -13,6 +13,10 @@ Implements user spec:
 """
 import struct, os
 try:
+    from .diag import note
+except ImportError:
+    from diag import note
+try:
     from .transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
 except ImportError:
     from transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
@@ -28,6 +32,161 @@ EXT = ".rissa"
 BLOCK_1M = 1*1024*1024
 BLOCK_4M = 4*1024*1024
 DEFAULT_BLOCK = BLOCK_1M
+
+# Shared block evaluator (serial + parallel call THIS — no duplicated logic).
+# Priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text.
+_PRIORITY_ORDER_V4 = [0, 19, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
+
+def _eval_block_v4(block: bytes, backend: str, level, dict_to_use, fast: bool,
+                   has_zstd: bool, allow_xor_prev: bool, prev_block_raw: bytes):
+    """Per-block MDL evaluation with the exact serial policy.
+
+    Pure function of its arguments (XOR_PREV explicitly gated by
+    allow_xor_prev + prev_block_raw): safe in worker threads, and serial and
+    parallel output converge by construction (parallel simply disables the
+    cross-block XOR_PREV, as before). Returns
+    (best_tid, best_extra, best_payload, best_name).
+    """
+    import lzma, zlib
+    try:
+        from .transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
+    except ImportError:
+        from transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
+    try:
+        from .huffman import huffman_encode_block, huffman_decode_block
+    except ImportError:
+        from huffman import huffman_encode_block, huffman_decode_block
+    best_tid = 0
+    best_extra = b""
+    best_payload = None
+    best_size = float('inf')
+    best_name = "RAW"
+    for tid in _PRIORITY_ORDER_V4:
+        if tid not in TRANSFORMS_V2: continue
+        name, enc, dec = TRANSFORMS_V2[tid]
+        # BWT now supports up to 256K via radix, sub-block handles 1M+ - don't disable at 2K
+        if tid in [5, 12] and len(block) > 256 * 1024:
+            # For >256K, use BWT_SUBBLOCK (16) instead, which handles 1M via 4x256K
+            continue
+        try:
+            transformed, extra = enc(block)
+        except Exception as e:
+            note(f"v4-eval {name}", e)
+            continue
+        if transformed is None:
+            continue
+        # Compress with backend — tuned to xz -9 (preset 9|PRESET_EXTREME, dict 64M) to close 0.12% gap
+        if backend == "lzma":
+            # Use xz -9 equivalent: preset 9|PRESET_EXTREME, dict 64M
+            preset_to_use = (6 | lzma.PRESET_EXTREME) if (dict_to_use and not fast) else (level | lzma.PRESET_EXTREME if level == 9 else level)
+            if fast and dict_to_use:
+                preset_to_use = 6 | lzma.PRESET_EXTREME
+            try:
+                if dict_to_use:
+                    comp = lzma.compress(transformed, preset=preset_to_use, preset_dict=dict_to_use)
+                else:
+                    comp = lzma.compress(transformed, preset=preset_to_use)
+            except TypeError:
+                try:
+                    c = lzma.LZMACompressor(preset=preset_to_use, preset_dict=dict_to_use) if dict_to_use else lzma.LZMACompressor(preset=preset_to_use)
+                    comp = c.compress(transformed) + c.flush()
+                except Exception as e:
+                    note("v4-eval lzma dict fallback", e)
+                    comp = lzma.compress(transformed, preset=preset_to_use)
+            size = len(comp)
+        elif backend == "zstd" and has_zstd:
+            import zstandard as zstd
+            cctx = zstd.ZstdCompressor(level=level)
+            comp = cctx.compress(transformed)
+            size = len(comp)  # was compressing twice; output identical, half the work
+        elif backend == "zlib":
+            comp = zlib.compress(transformed, level)
+            size = len(comp)
+        else:
+            encd, freq, pad, _ = huffman_encode_block(transformed)
+            comp = encd
+            size = len(comp) + 512
+
+        total = size + 1 + len(extra)
+        if total < best_size:
+            best_size = total
+            best_tid = tid
+            best_extra = extra
+            best_payload = comp
+            best_name = name
+            # Hard early-stop for highly repetitive: <1% of raw
+            if total < len(block) * 0.01:
+                break
+            # Early termination disabled for now — was too aggressive (broke before RACD on nci where RAW 1.7M << ent 10M)
+            # if ent_bytes > 0 and total <= ent_bytes * entropy_threshold:
+            #     break
+        # Context-mixing order-1 probe was a no-op (result discarded via pass)
+        # and burned a full order-1 encode per BWT block: removed, no output change.
+
+    # XOR with prev block as extra transform.
+    # LOUD CHECK: XOR_PREV is mutually exclusive with parallel/streaming — the
+    # caller passes allow_xor_prev=False there to avoid silent corruption.
+    if allow_xor_prev and len(prev_block_raw) > 0:
+        try:
+            xor_transformed = xor_prev_block_encode(block, prev_block_raw)
+            # Try compress XOR version with LZMA
+            if backend == "lzma":
+                preset_to_use = 6 if dict_to_use else level
+                try:
+                    if dict_to_use:
+                        comp_xor = lzma.compress(xor_transformed, preset=preset_to_use, preset_dict=dict_to_use)
+                    else:
+                        comp_xor = lzma.compress(xor_transformed, preset=preset_to_use)
+                except Exception as e:
+                    note("v4-eval xor lzma fallback", e)
+                    comp_xor = lzma.compress(xor_transformed, preset=preset_to_use)
+                total_xor = len(comp_xor) + 1 + 8  # extra for prev block hash
+                if total_xor < best_size:
+                    # Use special TID 99 for XOR_PREV
+                    best_tid = 99
+                    best_extra = b"XORP" + struct.pack(">I", len(prev_block_raw))
+                    best_payload = comp_xor
+                    best_name = "XOR_PREV"
+        except Exception as e:
+            note("v4-eval xor-prev", e)
+            pass
+
+    # Also test bit-plane separation
+    try:
+        bp_transformed = bit_plane_separation_encode(block)
+        if bp_transformed != block:
+            if backend == "lzma":
+                comp_bp = lzma.compress(bp_transformed, preset=level if not dict_to_use else 6, preset_dict=dict_to_use) if dict_to_use else lzma.compress(bp_transformed, preset=level)
+                total_bp = len(comp_bp) + 1
+                if total_bp < best_size:
+                    best_tid = 100
+                    best_extra = b""
+                    best_payload = comp_bp
+                    best_name = "BIT_PLANE"
+    except Exception as e:
+        note("v4-eval bit-plane", e)
+        pass
+    return best_tid, best_extra, best_payload, best_name
+
+def _write_block_v4(out, chosen, backend, block, best_tid, best_extra, best_payload, best_name):
+    """Append one evaluated block to the container (serial + parallel share this).
+
+    EXTRA_LEN is a single byte: extras longer than 255B are refused loudly at
+    write time rather than silently truncated (see FORMAT.md).
+    """
+    if len(best_extra) > 255:
+        raise ValueError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
+    chosen.append(best_name)
+    out.append(best_tid & 0xFF)
+    out.append(len(best_extra))
+    out.extend(struct.pack(">I", len(block)))
+    if backend == "huffman":
+        # Not used for v4 lzma
+        pass
+    else:
+        out.extend(struct.pack(">I", len(best_payload)))
+        out.extend(best_extra)
+        out.extend(best_payload)
 
 def build_lzma_dict(data: bytes, max_dict_size=64*1024, sample_size=1024*1024):
     """
@@ -76,7 +235,8 @@ def build_lzma_dict(data: bytes, max_dict_size=64*1024, sample_size=1024*1024):
         _ranked = _CS.rank_ngrams(bytes(sample), 8, 3, 1000000)
         # pack loop below only uses cnt for its >=3 gate: all qualify by construction
         sorted_subs = [(s, 3) for s in _ranked]
-    except:
+    except Exception as e:
+        note("v4 dict ngrams, using Python fallback", e)
         freq = {}
         window = 8
         # Use memoryview for speed
@@ -166,7 +326,8 @@ def _get_lzma_compressor(preset_dict: bytes, preset: int, dict_size: int = 64*10
         except TypeError:
             try:
                 return lzma.LZMACompressor(format=lzma.FORMAT_ALONE, preset=preset, preset_dict=preset_dict)
-            except:
+            except Exception as e:
+                note("v4 lzma dict compressor fallback", e)
                 return lzma.LZMACompressor(preset=preset)
     else:
         return lzma.LZMACompressor(preset=preset)
@@ -201,7 +362,7 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     try:
         import zstandard as zstd
         has_zstd = True
-    except:
+    except Exception:
         has_zstd = False
 
     # Two-pass: first pass builds global dict from whole file
@@ -231,7 +392,8 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
                     try:
                         c = lzma.LZMACompressor(preset=6, preset_dict=pd)
                         return c.compress(d) + c.flush()
-                    except:
+                    except Exception as e:
+                        note("v4 dict-gate lzma fallback", e)
                         # Fallback without dict
                         return lzma.compress(d, preset=6)
             c_without = lzma.compress(sample, preset=6)
@@ -239,7 +401,8 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
             # For gate, consider compressed dict overhead (dict will be lzma compressed in header)
             try:
                 dict_comp_overhead = len(lzma.compress(preset_dict_bytes[:32768], preset=9))
-            except:
+            except Exception as e:
+                note("v4 dict overhead estimate", e)
                 dict_comp_overhead = len(preset_dict_bytes) // 2
             gain = len(c_without) - len(c_with)
             # Require gain > overhead for small files, or any gain for large
@@ -276,298 +439,38 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         out.extend(struct.pack(">I", 0))
         out.extend(struct.pack(">I", 0))
 
-    # Adaptive priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text
-    priority_order = [0, 19, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
-    # Early termination threshold: if RAW+LZMA achieves >90% of entropy, skip others
-    # Compute entropy sample
-    from collections import Counter
-    import math
-    def shannon(d):
-        if not d: return 0
-        c = Counter(d)
-        n2 = len(d)
-        return -sum((v/n2)*math.log2(v/n2) for v in c.values())
-
     chosen = []
     prev_block_raw = b""
-    # For speed: use multiprocessing if many blocks (ASUS TUF i7-8750H 6c/12t, 32GB) — 6 workers RAM, 2-3 HDD
-    # Each block independent — XOR_PREV is NOT compatible with parallel (prev_block_raw not shared) or streaming
-    # Loud check: if use_mp and XOR_PREV would be used, disable XOR_PREV to avoid silent corruption
+    # Parallelism: blocks are independent except XOR_PREV (prev_block_raw not
+    # shared). use_mp = many 1M+ blocks -> ThreadPool(6); XOR_PREV disabled
+    # there via allow_xor_prev=False (loud, no silent corruption). 6 workers =
+    # physical cores (not 12 HT); for HDD use fewer. ThreadPool only: no
+    # processes are spawned (no pickle, no Windows spawn overhead).
     use_mp = len(blocks) > 4 and block_size >= BLOCK_1M
     # Note: benchmark files on Seagate HDD — speed tests use in-memory data (no I/O) to avoid HDD bound; ratio is storage-independent
-    # Fast mode: more aggressive early termination at 90% entropy
-    entropy_threshold = 1.2 if fast else 1.1
 
-    # If multiprocessing, use ProcessPoolExecutor with 6 workers for RAM (12 logical, but 6 physical avoids HT overhead)
-    # For HDD, use 2-3 workers to avoid I/O bottleneck — here we use 6 for in-memory, caller can pass use_mp=False for HDD
     if use_mp:
-        import concurrent.futures
-        # Prepare args for parallel: each block with its index and prev_block (but prev not shared, so XOR disabled)
-        # Use imap to maintain order, reuse pool for whole file
-        def _compress_one_block(args):
-            idx, block = args
-            # Re-implement per-block MDL here for parallel (without prev_block dependency)
-            best_tid = 0
-            best_extra = b""
-            best_payload = None
-            best_size = float('inf')
-            best_name = "RAW"
-            # Use same priority_order and logic as below, but without XOR_PREV
-            import lzma, zlib
-            try:
-                import zstandard as zstd
-                has_zstd = True
-            except:
-                has_zstd = False
-            from collections import Counter
-            import math
-            def shannon_local(d):
-                if not d: return 0
-                c = Counter(d)
-                n2 = len(d)
-                return -sum((v/n2)*math.log2(v/n2) for v in c.values())
-            ent = shannon_local(block)
-            ent_bytes = ent/8*len(block) if block else 0
-            # Import transforms
-            try:
-                try:
-                    from .transforms_v2 import TRANSFORMS_V2
-                except ImportError:
-                    from deep_compress.transforms_v2 import TRANSFORMS_V2
-                try:
-                    from .huffman import huffman_encode_block
-                except ImportError:
-                    from deep_compress.huffman import huffman_encode_block
-            except:
-                try:
-                    from .transforms_v2 import TRANSFORMS_V2
-                except ImportError:
-                    from deep_compress.transforms_v2 import TRANSFORMS_V2
-                try:
-                    from .huffman import huffman_encode_block
-                except ImportError:
-                    from deep_compress.huffman import huffman_encode_block
-            for tid in priority_order:
-                if tid not in TRANSFORMS_V2: continue
-                name, enc, dec = TRANSFORMS_V2[tid]
-                if tid in [5,12] and len(block) > 256*1024:
-                    continue
-                try:
-                    transformed, extra = enc(block)
-                except:
-                    continue
-                if transformed is None:
-                    continue
-                if backend == "lzma":
-                    preset_to_use = 6 if dict_to_use else level
-                    try:
-                        if dict_to_use:
-                            comp = lzma.compress(transformed, preset=preset_to_use, preset_dict=dict_to_use)
-                        else:
-                            comp = lzma.compress(transformed, preset=preset_to_use)
-                    except:
-                        comp = lzma.compress(transformed, preset=preset_to_use)
-                    size = len(comp)
-                elif backend == "zstd" and has_zstd:
-                    cctx = zstd.ZstdCompressor(level=level)
-                    comp = cctx.compress(transformed)
-                    size = len(comp)
-                elif backend == "zlib":
-                    comp = zlib.compress(transformed, level)
-                    size = len(comp)
-                else:
-                    encd, freq, pad,_ = huffman_encode_block(transformed)
-                    comp = encd
-                    size = len(comp) + 512
-                total = size + 1 + len(extra)
-                if total < best_size:
-                    best_size = total
-                    best_tid = tid
-                    best_extra = extra
-                    best_payload = comp
-                    best_name = name
-                    if total < len(block) * 0.01:
-                        break
-            return (idx, best_tid, best_extra, best_payload, best_name, len(block))
-
-        # Use 6 workers for RAM (physical cores), not 12 to avoid HT overhead
-        max_workers = 6
-        # For HDD, caller should use max_workers=2-3, but here we use 6 for in-memory
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            # Need to handle that dict_to_use and other vars need to be picklable - for now, use ThreadPool for simplicity to avoid spawn overhead on Windows
-            # On Windows, spawn overhead high, so use ThreadPool for now
-            import concurrent.futures as cf
-            # Fallback to ThreadPool for Windows to avoid pickle large blocks
-            with cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
-                results = list(ex.map(_compress_one_block, [(i, b) for i, b in enumerate(blocks)]))
-        # Reassemble in order
-        results.sort(key=lambda x: x[0])
-        for idx, best_tid, best_extra, best_payload, best_name, orig_len in results:
-            block = blocks[idx]
-            chosen.append(best_name)
-            out.append(best_tid & 0xFF)
-            out.append(len(best_extra))
-            out.extend(struct.pack(">I", orig_len))
-            out.extend(struct.pack(">I", len(best_payload)))
-            out.extend(best_extra)
-            out.extend(best_payload)
+        import concurrent.futures as _cf
+        import functools as _ft
+        _ev = _ft.partial(_eval_block_v4, backend=backend, level=level,
+                          dict_to_use=dict_to_use, fast=fast, has_zstd=has_zstd,
+                          allow_xor_prev=False, prev_block_raw=b'')
+        # ThreadPool only (no processes: no pickle, no Windows spawn overhead).
+        # map() preserves input order, so results align with blocks.
+        with _cf.ThreadPoolExecutor(max_workers=min(6, len(blocks))) as _ex:
+            results = list(_ex.map(lambda t: (t[0], _ev(t[1])), enumerate(blocks)))
+        for idx, (best_tid, best_extra, best_payload, best_name) in results:
+            _write_block_v4(out, chosen, backend, blocks[idx],
+                            best_tid, best_extra, best_payload, best_name)
         from collections import Counter
         return bytes(out), Counter(chosen), dict_to_use
 
     for idx, block in enumerate(blocks):
-        best_tid = 0
-        best_extra = b""
-        best_payload = None
-        best_size = float('inf')
-        best_name = "RAW"
-        cache = {}
-        ent = shannon(block)
-        ent_bytes = ent/8*len(block) if block else 0
-        for tid in priority_order:
-            if tid not in TRANSFORMS_V2: continue
-            name, enc, dec = TRANSFORMS_V2[tid]
-            # BWT now supports up to 256K via radix, sub-block handles 1M+ - don't disable at 2K
-            if tid in [5,12] and len(block) > 256*1024:
-                # For >256K, use BWT_SUBBLOCK (16) instead, which handles 1M via 4x256K
-                if tid in [5,12]:
-                    continue
-            # Check cache
-            cache_key = tid
-            if cache_key in cache:
-                transformed, extra = cache[cache_key]
-            else:
-                try:
-                    # Special handling for XOR prev block - need prev_block_raw
-                    if name == "XOR_DELTA" and idx > 0:
-                        # Try XOR with prev block as additional transform
-                        # For now, treat XOR_DELTA as normal; XOR_PREV as separate test after
-                        transformed, extra = enc(block)
-                    else:
-                        transformed, extra = enc(block)
-                except:
-                    continue
-                if transformed is None:
-                    continue
-                cache[cache_key] = (transformed, extra)
-
-            # Also test bit-plane separation as additional transform for this block
-            # (we treat it as separate tid, but for speed test with LZMA)
-            
-            # Compress with backend — tuned to xz -9 (preset 9|PRESET_EXTREME, dict 64M) to close 0.12% gap
-            if backend == "lzma":
-                # Use xz -9 equivalent: preset 9|PRESET_EXTREME, dict 64M
-                preset_to_use = (6 | lzma.PRESET_EXTREME) if (dict_to_use and not fast) else (level | lzma.PRESET_EXTREME if level==9 else level)
-                if fast and dict_to_use:
-                    preset_to_use = 6 | lzma.PRESET_EXTREME
-                try:
-                    if dict_to_use:
-                        comp = lzma.compress(transformed, preset=preset_to_use, preset_dict=dict_to_use)
-                    else:
-                        comp = lzma.compress(transformed, preset=preset_to_use)
-                except TypeError:
-                    try:
-                        c = lzma.LZMACompressor(preset=preset_to_use, preset_dict=dict_to_use) if dict_to_use else lzma.LZMACompressor(preset=preset_to_use)
-                        comp = c.compress(transformed) + c.flush()
-                    except:
-                        comp = lzma.compress(transformed, preset=preset_to_use)
-                size = len(comp)
-            elif backend == "zstd" and has_zstd:
-                cctx = zstd.ZstdCompressor(level=level)
-                comp = cctx.compress(transformed)
-                size = len(comp)  # was compressing twice; output identical, half the work
-            elif backend == "zlib":
-                comp = zlib.compress(transformed, level)
-                size = len(comp)
-            else:
-                encd, freq, pad,_ = huffman_encode_block(transformed)
-                comp = encd
-                size = len(comp) + 512
-
-            total = size + 1 + len(extra)
-            if total < best_size:
-                best_size = total
-                best_tid = tid
-                best_extra = extra
-                best_payload = comp
-                best_name = name
-                # Hard early-stop for highly repetitive: <1% of raw
-                if total < len(block) * 0.01:
-                    break
-                # Early termination disabled for now — was too aggressive (broke before RACD on nci where RAW 1.7M << ent 10M)
-                # if ent_bytes > 0 and total <= ent_bytes * entropy_threshold:
-                #     break
-            # Context-mixing: after BWT_MTF, try order-1 Huffman (can beat LZMA on BWT output, self-contained)
-            if tid in [5,12] and backend == "lzma":  # BWT_MTF
-                try:
-                    try:
-                        from .huffman import huffman_order1_encode_block
-                    except ImportError:
-                        from deep_compress.huffman import huffman_order1_encode_block
-                    enc1, _, _, _ = huffman_order1_encode_block(transformed)
-                    # Order-1 header is large (256*...), but for BWT output it may still win
-                    # For prototype, just estimate: if enc1 < comp, consider it
-                    if len(enc1) + 1 + len(extra) < best_size:
-                        # Use order-1 as alternative backend for this block (store as huffman order-1)
-                        # For now, keep lzma best, but note order-1 would be self-contained
-                        pass
-                except:
-                    pass
-
-        # Also test XOR with prev block as extra transform if not already best
-        # LOUD CHECK: XOR_PREV is mutually exclusive with parallel/streaming — skip in use_mp to avoid silent corruption
-        # If someone needs XOR_PREV, they must call compress_v4 with single block or sequential mode
-        if use_mp:
-            # Skip XOR_PREV in parallel mode
-            pass
-        elif idx > 0 and len(prev_block_raw) > 0:
-            try:
-                xor_transformed = xor_prev_block_encode(block, prev_block_raw)
-                # Try compress XOR version with LZMA
-                if backend == "lzma":
-                    preset_to_use = 6 if dict_to_use else level
-                    try:
-                        if dict_to_use:
-                            comp_xor = lzma.compress(xor_transformed, preset=preset_to_use, preset_dict=dict_to_use)
-                        else:
-                            comp_xor = lzma.compress(xor_transformed, preset=preset_to_use)
-                    except:
-                        comp_xor = lzma.compress(xor_transformed, preset=preset_to_use)
-                    total_xor = len(comp_xor) + 1 + 8  # extra for prev block hash
-                    if total_xor < best_size:
-                        # Use special TID 99 for XOR_PREV
-                        best_tid = 99
-                        best_extra = b"XORP" + struct.pack(">I", len(prev_block_raw))
-                        best_payload = comp_xor
-                        best_name = "XOR_PREV"
-            except:
-                pass
-
-        # Also test bit-plane separation
-        try:
-            bp_transformed = bit_plane_separation_encode(block)
-            if bp_transformed != block:
-                if backend == "lzma":
-                    comp_bp = lzma.compress(bp_transformed, preset=level if not dict_to_use else 6, preset_dict=dict_to_use) if dict_to_use else lzma.compress(bp_transformed, preset=level)
-                    total_bp = len(comp_bp) + 1
-                    if total_bp < best_size:
-                        best_tid = 100
-                        best_extra = b""
-                        best_payload = comp_bp
-                        best_name = "BIT_PLANE"
-        except:
-            pass
-
-        chosen.append(best_name)
-        out.append(best_tid & 0xFF)
-        out.append(len(best_extra))
-        out.extend(struct.pack(">I", len(block)))
-        if backend == "huffman":
-            # Not used for v4 lzma
-            pass
-        else:
-            out.extend(struct.pack(">I", len(best_payload)))
-            out.extend(best_extra)
-            out.extend(best_payload)
+        best_tid, best_extra, best_payload, best_name = _eval_block_v4(
+            block, backend, level, dict_to_use, fast, has_zstd,
+            allow_xor_prev=not use_mp, prev_block_raw=prev_block_raw)
+        _write_block_v4(out, chosen, backend, block,
+                        best_tid, best_extra, best_payload, best_name)
         prev_block_raw = block
 
     from collections import Counter
@@ -594,7 +497,7 @@ def decompress_v4(data: bytes):
     try:
         import zstandard as zstd
         has_zstd=True
-    except: has_zstd=False
+    except Exception: has_zstd=False
     if not data.startswith(MAGIC):
         # fallback to v3
         try:
@@ -636,7 +539,8 @@ def decompress_v4(data: bytes):
         dict_compressed=_need(dict_comp_len, "dict")
         try:
             dict_bytes=lzma.decompress(dict_compressed)
-        except:
+        except Exception as e:
+            note("v4d dict fallback to raw", e)
             dict_bytes=dict_compressed
     out=bytearray()
     prev_block_raw=b""
@@ -672,7 +576,8 @@ def decompress_v4(data: bytes):
                         transformed=lzma.decompress(comp, preset_dict=dict_bytes)
                     else:
                         transformed=lzma.decompress(comp)
-                except:
+                except Exception as e:
+                    note("v4d bit-plane dict fallback", e)
                     transformed=lzma.decompress(comp)
             else:
                 transformed=comp
@@ -693,7 +598,8 @@ def decompress_v4(data: bytes):
                         transformed=lzma.decompress(comp)
                 else:
                     transformed=lzma.decompress(comp)
-            except:
+            except Exception as e:
+                note("v4d lzma retry without dict", e)
                 transformed=lzma.decompress(comp)
         elif backend=="zlib":
             transformed=zlib.decompress(comp)

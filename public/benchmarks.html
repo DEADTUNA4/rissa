@@ -1,14 +1,43 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>Benchmarks — rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand">rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
-<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4.6.1 Timed end-to-end</h1><p class="mut">rissa v4.6.1 · 10 corpora + C microbench, comp/decomp wall time, MB/s both directions · Reproduce: <code>python deep_compress/bench_461.py --only &lt;name&gt;</code></p>
+<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks — v4.6.3 Repeatable numbers</h1><p class="mut">rissa v4.6.3 · multi-run medians, variance, peak RSS, CPU%, per-run baselines · Reproduce: <code>python deep_compress/bench_463.py --reps 3</code></p>
 <p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD — ratio storage-independent, speed may be I/O-bound) · Pure CPU in-memory <code>rissa.compress(data)</code> (no HDD) vs Full pipeline I/O · Multiprocessing 12 threads max (6 RAM / 2-3 HDD) · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
 <section>
 <h2>Version History — Scroll down to see older (latest first)</h2>
-<p class="mut">Newest at top — v4.6.1 is latest. See how far rissa has come.</p>
+<p class="mut">Newest at top — v4.6.3 is latest. See how far rissa has come.</p>
 
 <details open style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
-<summary><strong>v4.6.1 — 2026-09-04 — Timed end-to-end benchmark + RLE + rissa[arrow]</strong> <span class="badge">current</span></summary>
+<summary><strong>v4.6.3 — 2026-10-01 — Repeatable numbers: medians, variance, memory, screening evidence</strong> <span class="badge">current</span></summary>
+<p class="mut">Multi-run (<code>deep_compress/bench_463.py --reps</code>): median ± stdev, peak RSS, CPU%, per-run xz baselines, determinism asserted every rep. Key lesson: the machine drifted <strong>3.5× between sessions on identical code</strong> — ratios only count against same-run baselines. Sizes identical to v4.6.1/v4.6.2 everywhere.</p>
+<table><tr><th>Corpus</th><th>rissa size</th><th>comp median ± stdev (s)</th><th>decomp (s)</th><th>CPU</th><th>peak RSS</th></tr>
+<tr><td>columnar-1M</td><td class="num">1725</td><td class="num">14.22 ± 0.24</td><td class="num">0.016</td><td class="num">87%</td><td class="num">135MB</td></tr>
+<tr><td>fits-4M fast+parallel</td><td class="num">3286048</td><td class="num">5.48 ± 0.34</td><td class="num">0.069</td><td class="num">342%</td><td class="num">154MB</td></tr>
+<tr><td>sensor-480K</td><td class="num">100881</td><td class="num">7.25 ± 0.55</td><td class="num">0.020</td><td class="num">84%</td><td class="num">154MB</td></tr>
+<tr><td>Silesia dickens-1M</td><td class="num">310272</td><td class="num">26.19 ± 1.58</td><td class="num">0.046</td><td class="num">83%</td><td class="num">154MB</td></tr>
+<tr><td>Silesia nci-1M</td><td class="num">64612</td><td class="num">25.72 ± 0.47</td><td class="num">0.016</td><td class="num">88%</td><td class="num">154MB</td></tr>
+<tr><td>Silesia x-ray-1M</td><td class="num">477317</td><td class="num">21.01 ± 0.13</td><td class="num">0.074</td><td class="num">88%</td><td class="num">154MB</td></tr>
+<tr><td>Silesia xml-1M</td><td class="num">117404</td><td class="num">19.03 ± 2.70</td><td class="num">0.042</td><td class="num">89%</td><td class="num">154MB</td></tr>
+</table>
+<p class="mut">Where time goes (64K block split): transforms <strong>1.7–2.7%</strong>, backend encodes <strong>97%+</strong> — the search, not the transforms, is the cost. Screening evidence (56 blocks, 7 corpora): top-3/zlib-1 missed the true best 4/56 → zstd-1 + top-4 misses 2/56 (xml only); fast==exhaustive re-verified byte-identical on 4 corpora at 2.6–4× speedup. Reproduce: <code>python deep_compress/bench_463.py --reps 3</code>, <code>python deep_compress/test_c_equivalence.py</code>.</p>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v4.6.2 — 2026-10-01 — C ports + import fix + screening + v3 parallelism + audit fixes</strong></summary>
+<p class="mut">Same 1M-sample suite as v4.6.1, single 1M blocks, lzma backend, roundtrip assert each. Every size below is <strong>byte-identical</strong> to v4.6.1 (strongest proof the C ports changed speed only). Micro (C): SHUFFLE 1362.4 MB/s, BIT 345.5, DELTA 1166.9, bit-identical. i7-8750H, Python 3.13.14.</p>
+<table><tr><th>Corpus</th><th>rissa size (= v4.6.1)</th><th>v4.6.1 comp s</th><th>v4.6.2 comp s</th><th>Speedup</th><th>vs xz</th></tr>
+<tr><td>columnar-1M</td><td class="num">1725 SHUFFLE4_DELTA</td><td class="num">71.17</td><td class="num">5.20</td><td class="num"><strong>13.7×</strong></td><td class="num"><strong>-97.36%</strong></td></tr>
+<tr><td>sensor-480K</td><td class="num">100881 SHUFFLE_8</td><td class="num">21.87</td><td class="num">2.82</td><td class="num"><strong>7.8×</strong></td><td class="num"><strong>-47.89%</strong></td></tr>
+<tr><td>Silesia dickens-1M</td><td class="num">310272 RAW</td><td class="num">120.27</td><td class="num">8.30</td><td class="num"><strong>14.5×</strong></td><td class="num">+0.04%</td></tr>
+<tr><td>Silesia nci-1M</td><td class="num">64612 RAW</td><td class="num">140.74</td><td class="num">9.47</td><td class="num"><strong>14.9×</strong></td><td class="num"><strong>-6.16%*</strong></td></tr>
+<tr><td>Silesia xml-1M</td><td class="num">117404 BWT_SUBBLOCK</td><td class="num">105.39</td><td class="num">6.78</td><td class="num"><strong>15.5×</strong></td><td class="num"><strong>-5.55%</strong></td></tr>
+<tr><td>Silesia x-ray-1M</td><td class="num">477317 SHUFFLE_2</td><td class="num">35.94</td><td class="num">7.58</td><td class="num"><strong>4.7×</strong></td><td class="num"><strong>-11.05%</strong></td></tr>
+</table>
+<p class="mut">*nci-1M reclassified tie (100% <code>9|PRESET_EXTREME</code> flag effect, problem #27) — kept for comparability. File-level: 4.2MB NASA FITS, v3 fast+parallel 64K — <strong>2.4s</strong> for 3,267,723B (was 65–200s), roundtrip-identical; exe end-to-end 2.3s / 0.04s decomp. Why faster: the v4.6.1 numbers were unknowingly pure-Python (circular import disabled all C extensions — fixed), plus 6-thread blocks and zlib-1 screening with identical winners. Decompression unchanged (no search): 30–170 MB/s.</p>
+</details>
+
+<details style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v4.6.1 — 2026-09-04 — Timed end-to-end benchmark + RLE + rissa[arrow]</strong></summary>
 <p class="mut">Single 1M blocks, lzma backend, 1 run + roundtrip assert each; micro 5 reps. i7-8750H, Python 3.13.14. Micro (C, bit-identical): SHUFFLE 1358.3 MB/s, BIT 344.2, DELTA 1188.1.</p>
 <table><tr><th>Corpus</th><th>Orig</th><th>xz -9 (s)</th><th>zstd-19 (s)</th><th>rissa</th><th>comp s / MB/s</th><th>decomp s / MB/s</th><th>vs xz</th></tr>
 <tr><td>counter-1M</td><td class="num">1048576</td><td class="num">512 (0.038)</td><td class="num">358 (0.005)</td><td class="num">544 RAW</td><td class="num">0.30 / 3.49</td><td class="num">0.003 / 313.6</td><td class="num">+6.25%</td></tr>
