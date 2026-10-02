@@ -4,7 +4,13 @@ Compressor v3: Phase 1 Architecture Upgrades
 - Streaming Frame API: for block in stream (no whole-file RAM)
 - Shared Dictionary Pass: 1MB sample -> 64KB header dict (zstd train or frequent substrings fallback)
 """
-import struct, os
+from __future__ import annotations
+import os
+import struct
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from collections import Counter
+    from .api_types import Backend, BlockResult
 try:
     from .diag import note
 except ImportError:
@@ -33,10 +39,11 @@ EXT = ".rissa"
 # (HAS_C_TRANS) they cost ~0.1s and rejoin the screen; without C the skip stays.
 BWT_TIDS = {5, 12, 16}
 
-def _encode_with_backend(transformed, backend, level, has_zstd, zstd_dict):
+def _encode_with_backend(transformed: bytes, backend: "Backend", level: int | None, has_zstd: bool, zstd_dict) -> tuple[bytes | tuple, int]:
     """Single backend encode. Returns (payload, size) with the same shapes
     as the inline loop below (huffman payload is a tuple)."""
-    import lzma, zlib
+    import lzma
+    import zlib
     if backend == "huffman":
         encd, freq, pad, _ = huffman_encode_block(transformed)
         return (encd, freq, pad), len(encd) + 512
@@ -60,15 +67,16 @@ def _encode_with_backend(transformed, backend, level, has_zstd, zstd_dict):
         return comp, len(comp)
     raise ValueError(f"unknown backend {backend!r}")
 
-def _eval_block_v3(block: bytes, backend: str, level, has_zstd: bool, zstd_dict, fast: bool):
+def _eval_block_v3(block: bytes, backend: "Backend", level: int | None, has_zstd: bool, zstd_dict, fast: bool) -> "BlockResult":
     """Per-block MDL evaluation (fast screen + exhaustive fallback).
 
     Pure function of its arguments: no cross-block state, shared inputs are
     read-only. Safe to run in worker threads; same code path as the serial
     loop, so serial and parallel output is byte-identical.
-    Returns (best_tid, best_extra, best_payload, best_name).
+    Returns a BlockResult (transform_id, extra, payload, transform_name).
     """
-    import lzma, zlib
+    import lzma
+    import zlib
     try:
         from .transforms_v2 import TRANSFORMS_V2
     except ImportError:
@@ -77,6 +85,10 @@ def _eval_block_v3(block: bytes, backend: str, level, has_zstd: bool, zstd_dict,
         from .huffman import huffman_encode_block
     except ImportError:
         from huffman import huffman_encode_block
+    try:
+        from .api_types import BlockResult
+    except ImportError:
+        from api_types import BlockResult
     best_tid = 0
     best_extra = b''
     best_payload = None
@@ -173,7 +185,8 @@ def _eval_block_v3(block: bytes, backend: str, level, has_zstd: bool, zstd_dict,
             if total < best_size:
                 best_size = total
                 best_tid, best_extra, best_payload, best_name = tid, extra, payload, name
-    return best_tid, best_extra, best_payload, best_name
+    return BlockResult(transform_id=best_tid, extra=best_extra,
+                       payload=best_payload, transform_name=best_name)
 
 def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
     """
@@ -221,7 +234,7 @@ def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
         note("shared-dict pack", e)
         return None
 
-def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_SIZE_64K, use_dict=True, fast=False, max_workers=None):
+def compress_with_dict(data: bytes, backend: "Backend" = "zstd", level: int | None = 19, block_size: int = BLOCK_SIZE_64K, use_dict: bool = True, fast: bool = False, max_workers: int | None = None) -> tuple[bytes, Counter[str], bytes | None]:
     """
     Per-block MDL + shared dict header. Dict is stored once in file header and used for all blocks via zstd dict.
     Returns (compressed_bytes, hist, dict_bytes)
@@ -233,7 +246,8 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
     1 = forced serial; N = forced N threads. Parallel output is byte-identical
     (ordered reassembly, same per-block function).
     """
-    import lzma, zlib
+    import lzma
+    import zlib
     try:
         import zstandard as zstd
         has_zstd=True
@@ -300,30 +314,31 @@ def compress_with_dict(data: bytes, backend="zstd", level=19, block_size=BLOCK_S
             results = list(_ex.map(_eval, blocks))
     else:
         results = [_eval_block_v3(b, backend, level, has_zstd, zstd_dict, fast) for b in blocks]
-    for block, (best_tid, best_extra, best_payload, best_name) in zip(blocks, results):
-        if len(best_extra) > 255:
-            raise FormatError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
-        chosen.append(best_name)
-        out.append(best_tid)
-        out.append(len(best_extra))
+    for block, res in zip(blocks, results):
+        if len(res.extra) > 255:
+            raise FormatError(f"transform extra {len(res.extra)}B exceeds 1-byte EXTRA_LEN field (tid {res.transform_id})")
+        chosen.append(res.transform_name)
+        out.append(res.transform_id)
+        out.append(len(res.extra))
         out.extend(struct.pack(">I", len(block)))  # 4 bytes now for 64K/128K
         if backend=="huffman":
-            encd,freq,pad = best_payload
+            encd,freq,pad = res.payload
             out.append(pad)
             for f in freq: out.extend(struct.pack(">H", min(f,65535)))
             out.extend(struct.pack(">I", len(encd)))
-            out.extend(best_extra)
+            out.extend(res.extra)
             out.extend(encd)
         else:
-            comp=best_payload
+            comp=res.payload
             out.extend(struct.pack(">I", len(comp)))
-            out.extend(best_extra)
+            out.extend(res.extra)
             out.extend(comp)
     from collections import Counter
     return bytes(out), Counter(chosen), dict_bytes
 
 def decompress_with_dict(data: bytes):
-    import lzma, zlib
+    import lzma
+    import zlib
     try:
         import zstandard as zstd
         has_zstd=True
@@ -424,7 +439,8 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=
         sample=in_stream.read(1_000_000)
         dict_bytes=build_shared_dict(sample) if sample else None
         # write header
-        import lzma, zlib
+        import lzma
+        import zlib
         try:
             import zstandard as zstd
             has_zstd=True

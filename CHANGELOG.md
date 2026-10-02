@@ -5,7 +5,7 @@
 ## v4.6.4 - 2026-10-01 - library polish I, logo, no-em-dash policy
 
 Library polish, not a rewrite (per review: the expensive part is backend search, not the transforms). **No benchmark changes by design - same bytes, same tables.**
-- New `deep_compress/errors.py` (`RissaError`/`TruncatedError`/`FormatError`, builtin-compatible) + `deep_compress/types.py` (`Backend` Literal, `BlockResult` dataclass); decoders wired over.
+- New `deep_compress/errors.py` (`RissaError`/`TruncatedError`/`FormatError`, builtin-compatible) + `deep_compress/api_types.py` (`Backend` Literal, `BlockResult` dataclass); decoders wired over.
 - `DEVELOPER.md` rewritten as Architecture and API Reference (public API / pipeline / 19-transform table / container / backends / Python API / internals); three-layer story (public API writes stable v3, v4 opt-in, internals underneath).
 - `FORMAT.md` + `public/spec.html` synced to format v4 wording; `DOCUMENTATION.md` fixed (19 transforms, dead rans.py refs); `GUIDE.md` carries the layer framing.
 - Repo-wide no-em-dash policy (542 replacements, 47 files, verified zero).

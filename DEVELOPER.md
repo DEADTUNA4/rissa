@@ -92,7 +92,7 @@ shuffle_encode(b"abcd"*4, 4)   # b"aaaa bbbb cccc dddd"
 
 ## 5. Backends
 
-`zstd` (default, levels via public `level` 1-4 → 3/6/19/22), `lzma` (preset 9, `9|PRESET_EXTREME` on the v4 path to match `xz -9`), `zlib`, `huffman` (order-0, 512B table; counts above 65535 monotonically scaled before tree build so encoder/decoder share the stored table). `huffman` is refused for streaming (frames carry no frequency table). Types: `Backend = Literal["zstd", "lzma", "zlib", "huffman"]` (`deep_compress/types.py`).
+`zstd` (default, levels via public `level` 1-4 → 3/6/19/22), `lzma` (preset 9, `9|PRESET_EXTREME` on the v4 path to match `xz -9`), `zlib`, `huffman` (order-0, 512B table; counts above 65535 monotonically scaled before tree build so encoder/decoder share the stored table). `huffman` is refused for streaming (frames carry no frequency table). Types: `Backend = Literal["zstd", "lzma", "zlib", "huffman"]` (`deep_compress/api_types.py`).
 
 ## 6. Python API details
 
@@ -101,7 +101,7 @@ shuffle_encode(b"abcd"*4, 4)   # b"aaaa bbbb cccc dddd"
 - `compress_stream(in, out, ...)` / `decompress_stream(in, out)` - constant-memory streaming (`block_size` is the memory knob).
 - Shared dicts: v3 samples 1MB → 64KB (`zstandard.train_dictionary`, 6-gram fallback), MDL-gated (kept only if it pays); v4 builds an lzma `preset_dict` from top 8-grams + CDC chunks.
 - Exceptions: `TruncatedError` (file ends mid-field, never partial output), `FormatError` (magic/version/ids/counts, cross-format feeds) - see `deep_compress/errors.py`.
-- Types: `deep_compress/types.py` (`Backend`, `BlockResult` dataclass with `transform_id/extra/payload/transform_name`). Python floor is 3.9: modern hints via `from __future__ import annotations`, plain `@dataclass` (no 3.10 `slots=True`).
+- Types: `deep_compress/api_types.py` (`Backend`, `BlockResult` dataclass with `transform_id/extra/payload/transform_name`). Python floor is 3.9: modern hints via `from __future__ import annotations`, plain `@dataclass` (no 3.10 `slots=True`).
 
 Example (escape hatch with inspection):
 

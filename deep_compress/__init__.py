@@ -1,6 +1,7 @@
 """rissa v4.3 - https://rissa.web.app"""
 __version__ = "4.6.4"
-import sys, os
+import os
+import sys
 _p = os.path.normpath(os.path.dirname(os.path.abspath(__file__)))
 if _p not in sys.path:
     sys.path.insert(0, _p)

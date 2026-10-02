@@ -46,12 +46,14 @@ Example header for format v4 1M without dict: `52 49 53 41 04 03 03 00 00 00 01 
 |-------|------|------|
 | `TID` | 1 | Transform ID 0-17, 19 (v4: also 99, 100). Unknown IDs are rejected with `ValueError`, never skipped |
 | `EXTRA_LEN` | 1 | 0-8 (BWT_SUBBLOCK needs up to 8+4·num) |
-| `ORIG_LEN` | 4 | `>I` original block length (v2 legacy: `>H`, max 65535B - oversize v2 writes are refused) |
+| `ORIG_LEN` | 4 | `>I` original block length (raw length; v2 legacy: `>H`, max 65535B - oversize v2 writes are refused) |
 | `COMP_LEN` | 4 | `>I` compressed payload length |
 | `EXTRA` | 0-2 | BWT primary `>H` 2B, SHUFFLE stride 1B `0x02/04/08`, else 0 |
 | `COMP` | var | `backend(transform(block))` |
 
 For single-block `<=4M` file, `NUM_BLOCKS=1` header overhead `4+1+1+4+4+8 + per-block 10 = 32B` (was 600B with 5×1M).
+
+Naming: `ORIG_LEN` is the raw (pre-transform) block length, `COMP_LEN` the stored payload length. Some prose calls them raw/payload length - same fields.
 
 ## Transform IDs
 

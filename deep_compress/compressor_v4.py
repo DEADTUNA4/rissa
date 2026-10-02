@@ -11,7 +11,13 @@ Implements user spec:
 6. Two-pass mode
 7. Format v4
 """
-import struct, os
+from __future__ import annotations
+import os
+import struct
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from collections import Counter
+    from .api_types import Backend, BlockResult
 try:
     from .diag import note
 except ImportError:
@@ -41,17 +47,17 @@ DEFAULT_BLOCK = BLOCK_1M
 # Priority: BWT_MTF caps 256K, BWT_SUBBLOCK 256K-1M closed, RACD field-level for nci text.
 _PRIORITY_ORDER_V4 = [0, 19, 5, 16, 1, 7, 12, 2, 3, 6, 8, 9, 10, 11, 13, 14, 15, 17]
 
-def _eval_block_v4(block: bytes, backend: str, level, dict_to_use, fast: bool,
-                   has_zstd: bool, allow_xor_prev: bool, prev_block_raw: bytes):
+def _eval_block_v4(block: bytes, backend: "Backend", level: int | None, dict_to_use: bytes | None, fast: bool,
+                   has_zstd: bool, allow_xor_prev: bool, prev_block_raw: bytes) -> "BlockResult":
     """Per-block MDL evaluation with the exact serial policy.
 
     Pure function of its arguments (XOR_PREV explicitly gated by
     allow_xor_prev + prev_block_raw): safe in worker threads, and serial and
     parallel output converge by construction (parallel simply disables the
-    cross-block XOR_PREV, as before). Returns
-    (best_tid, best_extra, best_payload, best_name).
+    cross-block XOR_PREV, as before). Returns a BlockResult.
     """
-    import lzma, zlib
+    import lzma
+    import zlib
     try:
         from .transforms_v2 import TRANSFORMS_V2, xor_encode, xor_decode
     except ImportError:
@@ -60,6 +66,10 @@ def _eval_block_v4(block: bytes, backend: str, level, dict_to_use, fast: bool,
         from .huffman import huffman_encode_block, huffman_decode_block
     except ImportError:
         from huffman import huffman_encode_block, huffman_decode_block
+    try:
+        from .api_types import BlockResult
+    except ImportError:
+        from api_types import BlockResult
     best_tid = 0
     best_extra = b""
     best_payload = None
@@ -170,27 +180,28 @@ def _eval_block_v4(block: bytes, backend: str, level, dict_to_use, fast: bool,
     except Exception as e:
         note("v4-eval bit-plane", e)
         pass
-    return best_tid, best_extra, best_payload, best_name
+    return BlockResult(transform_id=best_tid, extra=best_extra,
+                       payload=best_payload, transform_name=best_name)
 
-def _write_block_v4(out, chosen, backend, block, best_tid, best_extra, best_payload, best_name):
+def _write_block_v4(out: bytearray, chosen: list, backend: "Backend", block: bytes, res: "BlockResult"):
     """Append one evaluated block to the container (serial + parallel share this).
 
     EXTRA_LEN is a single byte: extras longer than 255B are refused loudly at
     write time rather than silently truncated (see FORMAT.md).
     """
-    if len(best_extra) > 255:
-        raise FormatError(f"transform extra {len(best_extra)}B exceeds 1-byte EXTRA_LEN field (tid {best_tid})")
-    chosen.append(best_name)
-    out.append(best_tid & 0xFF)
-    out.append(len(best_extra))
+    if len(res.extra) > 255:
+        raise FormatError(f"transform extra {len(res.extra)}B exceeds 1-byte EXTRA_LEN field (tid {res.transform_id})")
+    chosen.append(res.transform_name)
+    out.append(res.transform_id & 0xFF)
+    out.append(len(res.extra))
     out.extend(struct.pack(">I", len(block)))
     if backend == "huffman":
         # Not used for v4 lzma
         pass
     else:
-        out.extend(struct.pack(">I", len(best_payload)))
-        out.extend(best_extra)
-        out.extend(best_payload)
+        out.extend(struct.pack(">I", len(res.payload)))
+        out.extend(res.extra)
+        out.extend(res.payload)
 
 def build_lzma_dict(data: bytes, max_dict_size=64*1024, sample_size=1024*1024):
     """
@@ -336,7 +347,7 @@ def _get_lzma_compressor(preset_dict: bytes, preset: int, dict_size: int = 64*10
     else:
         return lzma.LZMACompressor(preset=preset)
 
-def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, use_dict=True, use_two_pass=False, preset_dict_bytes=None, fast=False, force_dict=False, max_block=False):
+def compress_v4(data: bytes, backend: "Backend" = "lzma", level: int | None = 9, block_size: int | None = DEFAULT_BLOCK, use_dict: bool = True, use_two_pass: bool = False, preset_dict_bytes: bytes | None = None, fast: bool = False, force_dict: bool = False, max_block: bool = False) -> tuple[bytes, Counter[str], bytes | None]:
     """
     v4 per-block MDL with LZMA preset_dict
     - larger blocks 1-4MB
@@ -362,7 +373,8 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     # else respect caller block_size for larger files
     if force_dict:
         print(f"[rissa] force_dict=True block_size={block_size} file_size={file_size}")
-    import lzma, zlib
+    import lzma
+    import zlib
     try:
         import zstandard as zstd
         has_zstd = True
@@ -463,18 +475,16 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
         # map() preserves input order, so results align with blocks.
         with _cf.ThreadPoolExecutor(max_workers=min(6, len(blocks))) as _ex:
             results = list(_ex.map(lambda t: (t[0], _ev(t[1])), enumerate(blocks)))
-        for idx, (best_tid, best_extra, best_payload, best_name) in results:
-            _write_block_v4(out, chosen, backend, blocks[idx],
-                            best_tid, best_extra, best_payload, best_name)
+        for idx, res in results:
+            _write_block_v4(out, chosen, backend, blocks[idx], res)
         from collections import Counter
         return bytes(out), Counter(chosen), dict_to_use
 
     for idx, block in enumerate(blocks):
-        best_tid, best_extra, best_payload, best_name = _eval_block_v4(
+        res = _eval_block_v4(
             block, backend, level, dict_to_use, fast, has_zstd,
             allow_xor_prev=not use_mp, prev_block_raw=prev_block_raw)
-        _write_block_v4(out, chosen, backend, block,
-                        best_tid, best_extra, best_payload, best_name)
+        _write_block_v4(out, chosen, backend, block, res)
         prev_block_raw = block
 
     from collections import Counter
@@ -497,7 +507,8 @@ def compress_v4(data: bytes, backend="lzma", level=9, block_size=DEFAULT_BLOCK, 
     return bytes(out), Counter(chosen), dict_to_use
 
 def decompress_v4(data: bytes):
-    import lzma, zlib
+    import lzma
+    import zlib
     try:
         import zstandard as zstd
         has_zstd=True
