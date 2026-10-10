@@ -33,6 +33,10 @@ build/
 Thumbs.db
 .firebase/
 
+# Firebase web config holds a browser key - never commit the real file.
+# See public/firebase-config.example.js for the tracked template.
+public/firebase-config.js
+
 rissa/*.pyd
 rissa/*.so
 rissa/*.dll
