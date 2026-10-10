@@ -4,13 +4,13 @@
 
 `rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978.
 
-**Live docs → https://rissa.web.app - v4.4 - Apache 2.0**
+**Live docs → https://rissa.web.app - v4.6.5 - Apache 2.0**
 
 ---
 
 ## What Rissa is
 
-`rissa` is a per-block adaptive compressor. For each 64K-1M block it tries 16 reversible transforms (`DELTA`, `SHUFFLE`, `FLOAT_SPLIT`, `BWT`, `BIT_TRANSPOSE`) and keeps the one with lowest description length:
+`rissa` is a per-block adaptive compressor. For each 64K-1M block it tries 19 reversible transforms (`DELTA`, `SHUFFLE`, `FLOAT_SPLIT`, `BWT`, `BIT_TRANSPOSE`) and keeps the one with lowest description length:
 
 ```
 Compressed = min_T [ Cost(T) + Cost(Model) + Cost(Data | Model) ]

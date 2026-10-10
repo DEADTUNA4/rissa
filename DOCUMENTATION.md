@@ -1,6 +1,6 @@
 # Rissa Documentation
 
-**https://rissa.web.app - Apache 2.0 - `pip install rissa-compress` - v4.6.4**
+**https://rissa.web.app - Apache 2.0 - `pip install rissa-compress` - v4.6.5**
 
 Three layers: **public API** (stable, writes the v3 container) - **containers** (v3 default, v4 for large-file/LZMA, both always decode) - **internals** (`deep_compress.*` escape hatches). Architecture overview: `DEVELOPER.md`. Byte-level spec: `FORMAT.md`.
 
@@ -44,7 +44,7 @@ assert original == data
 ```python
 rissa.compress(
     data: bytes,
-    level: int = 3,            # 1->3, 2->6, 3->19, 4->22 (backend levels); other ints pass through
+    level: int = 3,            # portable 1-4: zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9; other ints pass through (clamped 0-9 for zlib/lzma)
     block_size: int = 65536,   # 4096, 16384, 65536, 131072
     backend: Backend = "zstd", # "zstd" | "lzma" | "zlib" | "huffman"
     use_dict: bool = False,    # 1MB sample -> 64KB shared dict, MDL-gated
@@ -290,6 +290,7 @@ python tools/rissa_tool.py logs                       # log file path for bug re
 - **v4.6.2**: batch C ports, circular-import fix (was silently disabling all C), fast screening, v3 ThreadPool, audit hardening (sentinel, strict errors, subblock relayout).
 - **v4.6.3**: review checklist - dead pool removal, `RISSA_STRICT`, v4 unification, portable builds, screening evidence (zstd-1 + top-4), rigorous bench.
 - **v4.6.4**: library polish I (this document's structure), logo, no-em-dash policy. Same bytes by design.
+- **v4.6.5**: v4 huffman backend fixed (same block layout as v3, roundtrips); decoders reject corrupt `ORIG_LEN` and trailing data with `FormatError`; portable 1-4 levels mapped per backend (zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9) with engine clamping. On-disk format unchanged (public API still writes stable v3, v4 opt-in frozen). Benchmark sizes byte-identical to v4.6.1.
 
 ---
 
@@ -299,6 +300,6 @@ python tools/rissa_tool.py logs                       # log file path for bug re
 - `DICT_RESERVED` (TID 17): frozen identity stub, never better than RAW; TID kept for old files.
 - CDC dictionary substitution, order-1 Huffman, range coder, GPU shuffle: implemented-but-gated tracks, not default, not benchmarked.
 - BWT above 256K per chunk: stopgapped by `BWT_SUBBLOCK` (4x256K); true 1M+ SA-IS on hold (BWT already loses where tested).
-- v4 `huffman` backend: broken pre-existing (truncated block), CI marker test tracks it; v2/v3 huffman paths roundtrip fine.
+- v4 `huffman` backend: fixed in v4.6.5 (same block layout as v3, roundtrips); v2/v3 huffman paths always roundtripped fine.
 - Commented `No-Op` bypass and `max_block`/`force_dict` debug knobs: intentionally left in source, not shipped behavior.
 - Deprecated prose: anything saying "16 transforms", "v4.4" as a version, or pointing at `archive/rans.py` is stale - this file and `FORMAT.md` are canonical.

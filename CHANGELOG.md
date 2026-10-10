@@ -2,6 +2,15 @@
 
 **https://rissa.web.app - Apache 2.0 - `rissa-compress`**
 
+## v4.6.5 - 2026-10-10 - v4 huffman fix, decoder hardening, portable levels
+
+**On-disk format unchanged by design: the public API still writes stable v3 for backwards compatibility, v4 stays frozen and opt-in. A newer library release does not mean a newer format.**
+
+- **Fixed v4 huffman backend** (`deep_compress/compressor_v4.py`): the huffman branch kept only the encoded bytes and wrote a truncated block, so every `decompress_v4` failed. v4 now uses the same block layout as v3 (pad + 256 freq + enc_len + extra + payload) and roundtrips on empty, single-block, and multi-block inputs. `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py` now asserts roundtrip instead of tracking known failure.
+- **Decoder hardening** (v2/v3/v4): decoded block length must equal `ORIG_LEN` else `FormatError` (previously sliced silently, so corrupt lengths truncated output without error); trailing bytes after the last block raise `FormatError` (previously ignored); v2 transform failures now raise `FormatError` like v3/v4 instead of propagating raw. Verified: 10275 truncation cuts + 51 invalid-ID cases all rejected, no silent successes; length/trailing corruptions now raise.
+- **Portable levels:** public `rissa.compress(level=1-4)` maps per backend (zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9) instead of sending zstd-scale 19/22 to zlib/lzma (which raised `zlib.error` / `LZMAError`). Engine entry points clamp out-of-range zlib/lzma levels to 0-9 and default per backend (`compress_with_dict`/`compress_stream` default `None` -> zstd 19, lzma 9/6, zlib 9/6). Pure-Python fallback (C extensions blocked) verified green.
+- **Benchmark: no size regression.** v4 lzma single-block re-run at v4.6.5 is byte-identical to v4.6.1 refs: dickens-1M 310272 RAW, nci-1M 64612 RAW, xml-1M 117404 BWT_SUBBLOCK, x-ray-1M 477317 SHUFFLE_2, sensor-480K 100881 SHUFFLE_8, columnar-1M 1725 SHUFFLE4_DELTA (all roundtrip OK).
+
 ## v4.6.4 - 2026-10-01 - library polish I, logo, no-em-dash policy
 
 Library polish, not a rewrite (per review: the expensive part is backend search, not the transforms). **No benchmark changes by design - same bytes, same tables.**
@@ -52,7 +61,7 @@ All 10 findings verified in code, all fixed, all regression-tested (`test_audit_
 
 **Port policy (going forward):** default-path Python loops → C with bit-identity proof; dead paths (range-coder scaffold, order-1 experimental, GPU) stay Python with reasons recorded. Skipped: MTF Fenwick (MTF already 125MB/s C, BWT-gated anyway), order-1 pack (experimental), second CDC pass (experimental).
 
-**Rebuilt + reinstalled:** `dist/rissa-tool.exe` rebuilt (PyInstaller 6.19, frozen `doctor` all-True, exe roundtrip byte-identical); `pip install -e .` now 4.6.2 editable (needs w64devkit on PATH - `setup.cfg` forces `mingw32`; stale PyPI 3.0.0 removed). Library verified from outside the repo.
+**Rebuilt + reinstalled:** `dist/rissa-tool.exe` rebuilt (PyInstaller 6.19, frozen `doctor` all-True, exe roundtrip byte-identical); `pip install -e .` now 4.6.3 editable (needs w64devkit on PATH - `setup.cfg` forces `mingw32`; stale PyPI 3.0.0 removed). Library verified from outside the repo.
 
 **Fixed (critical, silent): circular import disabled ALL C extensions depending on entry point.** `rissa/__init__.py` did top-level `from deep_compress.compressor_v3 import ...`; whoever imported `deep_compress.compressor_v3` first (CLI, library API path, scripts) got a partially-initialized back-import, `rissa/__init__` raised, and every `HAS_C_*` silently fell back to `False` - all C extensions off, pure-Python speed, zero warning. `doctor` looked fine because it imports the `.pyd` files directly. Found because fast-mode screening picked RAW on dickens while exhaustive picked BWT_SUBBLOCK. Fix: `rissa/__init__.py` binds `compress`/`decompress` lazily (function-level imports); all in-package imports flipped to relative-first (`from .x import`, bare fallback); path inserts normalized+deduped (old code also polluted `sys.path` with un-normalized `..` chains). Verified all-True from every entry order, no shadow top-level modules.
 
@@ -62,7 +71,7 @@ All 10 findings verified in code, all fixed, all regression-tested (`test_audit_
 
 ## Known issues
 
-- **v4 huffman backend decompress is broken (pre-existing).** `compressor_v4.compress_v4(backend='huffman')` writes a truncated block (huffman branch emits no payload), so `decompress_v4` fails with `struct.error`. Verified pre-existing via `git stash` on original code - not a regression. Not used by any default path (defaults are lzma/zstd/zlib); `compressor_v2`'s huffman path roundtrips fine. Tracked by `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py`, which prints FIXED if behavior ever changes.
+- **v4 huffman backend fixed.** `compressor_v4` now uses the same block layout as v3 for huffman (pad + 256 freq + enc_len + extra + payload) and roundtrips on empty, single-block, and multi-block inputs. Former truncated-block failure closed; tracked by `test_v4_huffman_known_failure` in `deep_compress/test_roundtrip.py` which now asserts roundtrip.
 
 ## v4.6.1 - 2026-09-04 - Timed end-to-end benchmark + RLE pre-pass + rissa[arrow]
 

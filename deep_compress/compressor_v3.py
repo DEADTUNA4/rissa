@@ -234,7 +234,7 @@ def build_shared_dict(data: bytes, dict_size=65536, sample_size=1_000_000):
         note("shared-dict pack", e)
         return None
 
-def compress_with_dict(data: bytes, backend: "Backend" = "zstd", level: int | None = 19, block_size: int = BLOCK_SIZE_64K, use_dict: bool = True, fast: bool = False, max_workers: int | None = None) -> tuple[bytes, Counter[str], bytes | None]:
+def compress_with_dict(data: bytes, backend: "Backend" = "zstd", level: int | None = None, block_size: int = BLOCK_SIZE_64K, use_dict: bool = True, fast: bool = False, max_workers: int | None = None) -> tuple[bytes, Counter[str], bytes | None]:
     """
     Per-block MDL + shared dict header. Dict is stored once in file header and used for all blocks via zstd dict.
     Returns (compressed_bytes, hist, dict_bytes)
@@ -257,6 +257,12 @@ def compress_with_dict(data: bytes, backend: "Backend" = "zstd", level: int | No
     if backend=="zstd" and level is None: level=19
     if backend=="lzma" and level is None: level=9
     if backend=="zlib" and level is None: level=9
+    if backend=="huffman" and level is None: level=19
+    # Clamp out-of-range levels instead of crashing deep in the backend
+    # (public API maps 1-4 per backend; direct callers may pass zstd-scale
+    # levels for zlib/lzma by mistake).
+    if backend == "zlib" or backend == "lzma":
+        level = max(0, min(9, level))
 
     dict_bytes = build_shared_dict(data) if use_dict and has_zstd and len(data)>65536 else None
     # MDL gate dict: only keep if dict reduces total size (dict overhead 4+len)
@@ -404,7 +410,13 @@ def decompress_with_dict(data: bytes):
             extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
             encd=_need(enc_len, f"block {bi} huffman payload")
             transformed=huffman_decode_block(encd, freq, pad, orig_len)
-            out.extend(dec_fn(transformed, extra)[:orig_len])
+            try:
+                block = dec_fn(transformed, extra)
+            except Exception as e:
+                raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
+            if len(block) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+            out.extend(block)
         else:
             comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
             extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
@@ -416,13 +428,21 @@ def decompress_with_dict(data: bytes):
                 else:
                     dctx=zstd.ZstdDecompressor(dict_data=zstd_dict) if zstd_dict else zstd.ZstdDecompressor()
                     transformed=dctx.decompress(comp)
-            out.extend(dec_fn(transformed, extra)[:orig_len])
+            try:
+                block = dec_fn(transformed, extra)
+            except Exception as e:
+                raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
+            if len(block) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+            out.extend(block)
+    if pos != len(data):
+        raise FormatError(f"trailing data: {len(data) - pos}B after {num_blocks} blocks (file likely corrupt)")
     return bytes(out)
 
 # Streaming Frame API: for block in stream (no whole-file RAM)
 STREAM_SENTINEL = 0xFFFFFFFF  # num_blocks slot value marking a streaming frame (FORMAT.md)
 
-def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=BLOCK_SIZE_64K, use_dict=False):
+def compress_stream(in_stream, out_stream, backend="zstd", level=None, block_size=BLOCK_SIZE_64K, use_dict=False):
     """
     Streaming: reads from in_stream (file-like) in blocks, writes frame header then per-block frames.
     Use for large files that don't fit RAM. If use_dict, first 1MB is buffered to build dict (one-pass still).
@@ -433,6 +453,10 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=19, block_size=
     """
     if backend == "huffman":
         raise ValueError("huffman backend is not supported for streaming: stream frames carry no frequency table (use zstd/lzma/zlib)")
+    if level is None:
+        level = {"zstd": 19, "lzma": 6, "zlib": 6}.get(backend, 19)
+    if backend == "zlib" or backend == "lzma":
+        level = max(0, min(9, level))
     # For true streaming without dict, we can start immediately. With dict, need sample.
     if use_dict:
         # buffer first 1MB to build dict, then stream rest

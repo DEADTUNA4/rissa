@@ -13,7 +13,7 @@ import rissa
 
 # Simple
 data = open("telemetry.bin", "rb").read()
-compressed = rissa.compress(data, level=3)  # 1:3 2:6 3:19 4:22 -> zstd 3,6,19,22
+compressed = rissa.compress(data, level=3)  # portable 1-4: zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9
 assert rissa.decompress(compressed) == data
 
 # Advanced per-block control
@@ -90,7 +90,7 @@ Memory contract: `compress_stream`/`decompress_stream` hold O(block_size) plus o
 - `--block` 4096,16384,65536,131072,1048576,4194304
 - `--dict` enables 1MB→64KB `zstandard.train_dictionary` fallback 6-grams, MDL-gated (`with+dict < without`)
 - `--backend` `zstd` (default) `lzma` `zlib` `huffman`
-- `--level` maps 1→3,2→6,3→19,4→22
+- `--level` raw backend preset (zstd 1-22, lzma/zlib 0-9; engine clamps out-of-range). Public `rissa.compress(level=1-4)` maps portably instead.
 - `--stream` for `compress_stream`
 
 Examples in `deep_compress/test_roundtrip.py` and `public/docs.html`.

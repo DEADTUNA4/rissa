@@ -97,31 +97,34 @@ def test_compressor():
     print("All compressor OK")
 
 def test_v4_huffman_known_failure():
-    # KNOWN FAILURE (pre-existing, verified via git stash on original code):
-    # compressor_v4.compress_v4 with backend='huffman' writes a truncated
-    # block (no payload in the huffman branch), so decompress_v4 fails with
-    # struct.error. compressor_v2's huffman path (tested above) is fine.
-    # See CHANGELOG "Known issues". If this ever prints FIXED, promote it
-    # to a full roundtrip assertion and close the changelog entry.
-    print("\n=== v4+huffman (KNOWN FAILURE, see CHANGELOG) ===")
+    # Former KNOWN FAILURE, fixed: v4+huffman now uses the same block layout
+    # as v3 (pad + 256 freq + enc_len + extra + payload) and roundtrips.
+    # Kept name for compatibility with CI banners; returns "fixed" on success.
+    print("\n=== v4+huffman ===")
     try:
         from compressor_v4 import compress_v4, decompress_v4
     except ImportError as e:
         print(f"  skip (no compressor_v4): {e}")
         return "skipped"
-    data = b"x" * 20000  # RLE TID picks huffman path deterministically
-    try:
+    import os
+    cases = [
+        b"x" * 20000,
+        b"",
+        b"hello world " * 5000,
+        os.urandom(16384),
+        b"\x00" * 100000 + bytes([i % 256 for i in range(5000)]),
+    ]
+    for data in cases:
         comp, hist, _ = compress_v4(data, backend='huffman', block_size=20000, use_dict=False)
+        assert comp[:4] == b"RISA" and comp[4] == 4
         dec = decompress_v4(comp)
-        if dec == data:
-            print("  FIXED - v4+huffman roundtrips now; promote to full test + close CHANGELOG entry")
-            return "fixed"
-        else:
-            print("  UNEXPECTED: decoded without error but mismatch")
-            return "unexpected"
-    except Exception as e:
-        print(f"  KNOWN FAILURE still present ({type(e).__name__}): v4+huffman decompress broken, pre-existing")
-        return "known-fail"
+        assert dec == data, f"v4+huffman mismatch len {len(data)} hist {dict(hist)}"
+    # multi-block
+    data = os.urandom(100000)
+    comp, hist, _ = compress_v4(data, backend='huffman', block_size=16384, use_dict=False)
+    assert decompress_v4(comp) == data
+    print("  OK - v4+huffman roundtrips (fixed)")
+    return "fixed"
 
 def test_determinism():
     print("\n=== Determinism ===")
@@ -136,7 +139,7 @@ def test_versioning():
     print("\n=== Versioning ===")
     data=b"test version"
     comp,_=compress_with_backend(data, backend='zstd')
-    # v4.4 uses RISA v4, legacy DCM2 still accepted
+    # v4 uses RISA v4, legacy DCM2 still accepted
     assert comp[:4]==b"RISA" or comp[:4]==b"DCM2", f"magic {comp[:4]}"
     assert comp[4]==4 or comp[4]==2, f"version {comp[4]}"
     dec=decompress_with_backend(comp)
@@ -326,6 +329,9 @@ def test_audit_regressions():
     print("  v2 oversize guard: OK")
 
     # 7. public API version dispatch (v4 bytes via package decompress)
+    # Decision: public rissa.compress() writes stable v3 (VER=3); v4 is
+    # opt-in via deep_compress.compressor_v4 for 1M/4M lzma use. FORMAT.md,
+    # rissa/__init__.py, and DEVELOPER.md all document v3-default.
     import pathlib
     root = pathlib.Path(__file__).resolve().parent.parent
     if str(root) not in sys.path:
@@ -333,7 +339,9 @@ def test_audit_regressions():
     try:
         import rissa as pkg
         dd = os.urandom(50000)
-        assert pkg.decompress(pkg.compress(dd)) == dd
+        pc = pkg.compress(dd)
+        assert pc[:4] == b"RISA" and pc[4] == 3, f"public compress must write v3, got VER={pc[4] if len(pc) > 4 else 'short'}"
+        assert pkg.decompress(pc) == dd
         try:
             from compressor_v4 import compress_v4
         except ImportError:
@@ -361,6 +369,6 @@ if __name__=="__main__":
         print("\n=== TESTS FAILED: v4+huffman behaved unexpectedly (see above) ===")
         raise SystemExit(1)
     elif v4h in ("known-fail", "fixed", "skipped"):
-        print(f"\n=== ALL TESTS PASSED (v4+huffman status: {v4h}; pre-existing, see CHANGELOG) ===")
+        print(f"\n=== ALL TESTS PASSED (v4+huffman status: {v4h}) ===")
     else:
         print("\n=== ALL TESTS PASSED ===")

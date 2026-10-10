@@ -185,8 +185,13 @@ def decompress_with_backend(data: bytes):
             extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
             encoded=_need(enc_len, f"block {bi} huffman payload")
             transformed=huffman_decode_block(encoded, freq, padding, orig_len)
-            final=dec_fn(transformed, extra)
-            out.extend(final[:orig_len])
+            try:
+                final=dec_fn(transformed, extra)
+            except Exception as e:
+                raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
+            if len(final) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(final)}B (file likely corrupt)")
+            out.extend(final)
         else:
             comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
             extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
@@ -201,8 +206,15 @@ def decompress_with_backend(data: bytes):
                 else:
                     dctx=zstd.ZstdDecompressor()
                     transformed=dctx.decompress(comp)
-            final=dec_fn(transformed, extra)
-            out.extend(final[:orig_len])
+            try:
+                final=dec_fn(transformed, extra)
+            except Exception as e:
+                raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
+            if len(final) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(final)}B (file likely corrupt)")
+            out.extend(final)
+    if pos != len(data):
+        raise FormatError(f"trailing data: {len(data) - pos}B after {num_blocks} blocks (file likely corrupt)")
     return bytes(out)
 
 # Legacy per-block Huffman compressor for backward compat (block_size 4096)

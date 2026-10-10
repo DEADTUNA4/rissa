@@ -6,8 +6,8 @@ Public API (stable): compress() writes the v3 container; decompress() reads
 any version (v2/v3/v4 dispatch). Containers: v3 default, v4 opt-in via
 deep_compress.compressor_v4. Internals: deep_compress.* (escape hatches).
 """
-__version__ = "4.6.4"
-__author__ = "rissa (Rissanen MDL 1978) v4.3"
+__version__ = "4.6.5"
+__author__ = "rissa (Rissanen MDL 1978)"
 import os
 import sys
 from typing import TYPE_CHECKING
@@ -26,12 +26,30 @@ del _p
 # (all C extensions disabled with zero warning). Lazy binding fixes all entry
 # orders: `import rissa`, `import deep_compress.x`, scripts, and frozen exe.
 
+def _map_level(level: int, backend: str) -> int:
+    """Map portable 1-4 to backend-native levels; other ints pass through clamped."""
+    if level == 1:
+        return {"zstd": 3, "zlib": 1, "lzma": 0, "huffman": 3}.get(backend, level)
+    if level == 2:
+        return {"zstd": 6, "zlib": 6, "lzma": 3, "huffman": 6}.get(backend, level)
+    if level == 3:
+        return {"zstd": 19, "zlib": 9, "lzma": 9, "huffman": 19}.get(backend, level)
+    if level == 4:
+        return {"zstd": 22, "zlib": 9, "lzma": 9, "huffman": 22}.get(backend, level)
+    if backend == "zlib":
+        return max(0, min(9, level))
+    if backend == "lzma":
+        return max(0, min(9, level))
+    return level
+
 def compress(data: bytes, level: int = 3, block_size: int = 65536, use_dict: bool = False, backend: "Backend" = "zstd", fast: bool = False) -> bytes:
     """Compress bytes to a .rissa container (v3 layout).
 
     Args:
         data: input bytes, any length.
-        level: 1->3, 2->6, 3->19, 4->22 (backend levels); other ints pass through.
+        level: portable 1-4 (fast to max) mapped per backend
+            (zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9);
+            other ints pass through (clamped to 0-9 for zlib/lzma).
         block_size: split granularity (4096, 16384, 65536, 131072).
         backend: "zstd" (default) | "lzma" | "zlib" | "huffman".
         use_dict: shared 1MB->64KB dict, MDL-gated (auto-disabled when useless).
@@ -41,7 +59,7 @@ def compress(data: bytes, level: int = 3, block_size: int = 65536, use_dict: boo
         Container bytes. Raises ValueError for unknown backends.
     """
     from deep_compress.compressor_v3 import compress_with_dict
-    lvl = {1:3, 2:6, 3:19, 4:22}.get(level, level)
+    lvl = _map_level(level, backend)
     comp, _, _ = compress_with_dict(data, backend=backend, level=lvl, block_size=block_size, use_dict=use_dict, fast=fast)
     return comp
 

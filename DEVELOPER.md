@@ -25,7 +25,7 @@ Full signature (already supports everything the review sketch asked for):
 ```python
 rissa.compress(
     data: bytes,
-    level: int = 3,            # 1->3, 2->6, 3->19, 4->22 (backend levels)
+    level: int = 3,            # portable 1-4: zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9; other ints pass through (clamped 0-9 for zlib/lzma)
     block_size: int = 65536,
     backend: Backend = "zstd",  # "zstd" | "lzma" | "zlib" | "huffman"
     use_dict: bool = False,

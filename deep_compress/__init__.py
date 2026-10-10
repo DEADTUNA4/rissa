@@ -1,5 +1,5 @@
-"""rissa v4.3 - https://rissa.web.app"""
-__version__ = "4.6.4"
+"""rissa - https://rissa.web.app"""
+__version__ = "4.6.5"
 import os
 import sys
 _p = os.path.normpath(os.path.dirname(os.path.abspath(__file__)))
@@ -12,7 +12,19 @@ try:
 except: pass
 
 def compress(data: bytes, level: int = 3, **kw):
-    lvl = {1:3, 2:6, 3:19, 4:22}.get(level, level)
+    backend = kw.get("backend", "zstd")
+    if level == 1:
+        lvl = {"zstd": 3, "zlib": 1, "lzma": 0, "huffman": 3}.get(backend, level)
+    elif level == 2:
+        lvl = {"zstd": 6, "zlib": 6, "lzma": 3, "huffman": 6}.get(backend, level)
+    elif level == 3:
+        lvl = {"zstd": 19, "zlib": 9, "lzma": 9, "huffman": 19}.get(backend, level)
+    elif level == 4:
+        lvl = {"zstd": 22, "zlib": 9, "lzma": 9, "huffman": 22}.get(backend, level)
+    else:
+        lvl = level
+        if backend == "zlib" or backend == "lzma":
+            lvl = max(0, min(9, lvl))
     comp, _, _ = compress_with_dict(data, level=lvl, **kw)
     return comp
 

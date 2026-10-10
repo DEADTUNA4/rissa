@@ -1,6 +1,6 @@
 # Known Results - rissa Single Source of Truth
 
-**Updated: 2026-09-04 - v4.6.1 - Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/`**
+**Updated: 2026-10-10 - v4.6.5 - Silesia single-block `<=4M` adaptive, 12 files `deep_compress/silesia/` (sizes re-verified byte-identical to v4.6.1 at v4.6.5)**
 
 This is the standing table - win/tie/loss per file type, updated as we go. Do not re-derive from chat history.
 

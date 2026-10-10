@@ -1,6 +1,6 @@
 """
-rissa v4.5.1: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
-Format v4.4: global dict MDL-gated, variable blocks, chains, fast mode
+rissa: LZMA preset_dict + 1-4MB adaptive + SA-IS BWT radix
+Format v4: global dict MDL-gated, variable blocks, chains, fast mode
 
 Implements user spec:
 1. LZMA with trained preset_dict (frequent 8-byte substrings)
@@ -118,8 +118,8 @@ def _eval_block_v4(block: bytes, backend: "Backend", level: int | None, dict_to_
             size = len(comp)
         else:
             encd, freq, pad, _ = huffman_encode_block(transformed)
-            comp = encd
-            size = len(comp) + 512
+            comp = (encd, freq, pad)
+            size = len(encd) + 512
 
         total = size + 1 + len(extra)
         if total < best_size:
@@ -196,8 +196,15 @@ def _write_block_v4(out: bytearray, chosen: list, backend: "Backend", block: byt
     out.append(len(res.extra))
     out.extend(struct.pack(">I", len(block)))
     if backend == "huffman":
-        # Not used for v4 lzma
-        pass
+        # Same block layout as v3 (pad + 256 freq + enc_len + extra + payload)
+        # so v4+huffman roundtrips instead of writing a truncated block.
+        encd, freq, pad = res.payload
+        out.append(pad)
+        for f in freq:
+            out.extend(struct.pack(">H", min(f, 65535)))
+        out.extend(struct.pack(">I", len(encd)))
+        out.extend(res.extra)
+        out.extend(encd)
     else:
         out.extend(struct.pack(">I", len(res.payload)))
         out.extend(res.extra)
@@ -361,6 +368,10 @@ def compress_v4(data: bytes, backend: "Backend" = "lzma", level: int | None = 9,
     # Fast mode: preset 6+dict compensates, early termination
     if fast:
         level = 6
+    if level is None:
+        level = {"lzma": 9, "zstd": 19, "zlib": 9, "huffman": 19}.get(backend, 9)
+    if backend == "zlib" or backend == "lzma":
+        level = max(0, min(9, level))
     # Adaptive block size: header overhead per block is constant, use single block for <=4MB
     # max_block: for 15MB file, use single block to maximize LZMA window
     file_size = len(data)
@@ -513,6 +524,10 @@ def decompress_v4(data: bytes):
         import zstandard as zstd
         has_zstd=True
     except Exception: has_zstd=False
+    try:
+        from .huffman import huffman_decode_block
+    except ImportError:
+        from huffman import huffman_decode_block
     if not data.startswith(MAGIC):
         # fallback to v3
         try:
@@ -563,6 +578,28 @@ def decompress_v4(data: bytes):
         tid=_need(1, f"block {bi} transform id")[0]
         extra_len=_need(1, f"block {bi} extra length")[0]
         orig_len=struct.unpack(">I", _need(4, f"block {bi} orig length"))[0]
+        if backend == "huffman":
+            # Huffman block layout mirrors v3: pad + 256 freq + enc_len + extra + payload.
+            if tid in (99, 100):
+                raise FormatError(f"transform id {tid} is not supported with huffman backend in block {bi}")
+            if tid not in TRANSFORMS_V2:
+                raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19, 99, 100)")
+            _, _, dec_fn = TRANSFORMS_V2[tid]
+            pad=_need(1, f"block {bi} huffman padding")[0]
+            freq=[struct.unpack(">H", _need(2, f"block {bi} huffman freq {i}"))[0] for i in range(256)]
+            enc_len=struct.unpack(">I", _need(4, f"block {bi} huffman payload length"))[0]
+            extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
+            encd=_need(enc_len, f"block {bi} huffman payload")
+            transformed=huffman_decode_block(encd, freq, pad, orig_len)
+            try:
+                block = dec_fn(transformed, extra)
+            except Exception as e:
+                raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
+            if len(block) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+            out.extend(block)
+            prev_block_raw = block
+            continue
         comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
         extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
         comp=_need(comp_len, f"block {bi} payload")
@@ -581,8 +618,10 @@ def decompress_v4(data: bytes):
                 transformed=comp
             # XOR decode
             block = xor_prev_block_decode(transformed, prev_block_raw)
-            out.extend(block[:orig_len])
-            prev_block_raw = block[:orig_len]
+            if len(block) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+            out.extend(block)
+            prev_block_raw = block
             continue
         elif tid == 100: # BIT_PLANE
             if backend=="lzma":
@@ -597,8 +636,10 @@ def decompress_v4(data: bytes):
             else:
                 transformed=comp
             block = bit_plane_separation_decode(transformed)
-            out.extend(block[:orig_len])
-            prev_block_raw = block[:orig_len]
+            if len(block) != orig_len:
+                raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+            out.extend(block)
+            prev_block_raw = block
             continue
         # Normal
         if tid not in TRANSFORMS_V2:
@@ -621,14 +662,18 @@ def decompress_v4(data: bytes):
         elif backend=="zstd":
             transformed=zstd.ZstdDecompressor().decompress(comp) if has_zstd else zlib.decompress(comp)
         else:
-            transformed=comp
+            raise FormatError(f"invalid backend {backend!r} in block {bi} (huffman uses its own block layout)")
         # Need extra handling for transforms that need extra
         try:
             block = dec_fn(transformed, extra)
         except Exception as e:
             raise FormatError(f"transform {tid} decode failed in block {bi}: {type(e).__name__}: {e}")
-        out.extend(block[:orig_len])
-        prev_block_raw = block[:orig_len]
+        if len(block) != orig_len:
+            raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+        out.extend(block)
+        prev_block_raw = block
+    if pos != len(data):
+        raise FormatError(f"trailing data: {len(data) - pos}B after {num_blocks} blocks (file likely corrupt)")
     return bytes(out)
 
 if __name__=="__main__":

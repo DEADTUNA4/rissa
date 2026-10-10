@@ -1,14 +1,19 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/site.webmanifest"><title>Benchmarks - rissa v4</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"></head><body>
 <nav><div class="nav-inner"><a href="/" class="brand"><img src="/logo.png" alt="rissa logo" style="height:22px;vertical-align:-4px"> rissa</a><a href="/how-it-works.html">How it Works</a><a href="/benchmarks.html" class="active">Benchmarks</a><a href="/spec.html">Spec</a><a href="/docs.html">Docs</a><a href="https://github.com/DEADTUNA4/rissa" class="spacer">GitHub</a></div></nav>
-<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks - v4.6.4 Library polish (same bytes)</h1><p class="mut">rissa v4.6.4 - library polish release (same bytes as v4.6.3) - multi-run medians, variance, peak RSS, CPU%, per-run baselines · Reproduce: <code>python deep_compress/bench_463.py --reps 3</code></p>
+<header style="max-width:980px;margin:0 auto;padding:24px 20px"><h1>Benchmarks - v4.6.5 Huffman fix + hardening (same bytes)</h1><p class="mut">rissa v4.6.5 - v4 huffman fixed, decoders hardened, portable levels - default-path sizes byte-identical to v4.6.1 (verified 6/6) · Reproduce: <code>python deep_compress/bench_463.py --reps 3</code></p>
 <p class="mut" style="font-size:12px;border:1px solid #e5e5e5;background:#fff;padding:8px 10px;border-radius:8px">System: ASUS TUF FX504GE · i7-8750H 6c/12t @2.2GHz · 32GB DDR4 · Python 3.13.14 · Seagate ST2000LM007 2TB HDD (files on HDD - ratio storage-independent, speed may be I/O-bound) · Pure CPU in-memory <code>rissa.compress(data)</code> (no HDD) vs Full pipeline I/O · Multiprocessing 12 threads max (6 RAM / 2-3 HDD) · See <a href="https://github.com/DEADTUNA4/rissa/blob/main/deep_compress/BENCHMARK_SYSTEM.md">BENCHMARK_SYSTEM.md</a></p></header>
 <section>
 <h2>Version History - Scroll down to see older (latest first)</h2>
-<p class="mut">Newest at top - v4.6.4 is latest. See how far rissa has come.</p>
+<p class="mut">Newest at top - v4.6.5 is latest. See how far rissa has come.</p>
 
 <details open style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
-<summary><strong>v4.6.4 - 2026-10-01 - Library polish: python control, syntax, docs</strong> <span class="badge">current</span></summary>
+<summary><strong>v4.6.5 - 2026-10-10 - Huffman fix, hardening, portable levels (same default bytes)</strong> <span class="badge">current</span></summary>
+<p class="mut">v4 huffman now roundtrips (v3 block layout); corrupt lengths and trailing data raise <code>FormatError</code>; levels map per backend. <strong>No default-path size change: v4 lzma single-block re-run is byte-identical to v4.6.1 on all 6 references</strong> (dickens 310272, nci 64612, xml 117404, x-ray 477317, sensor 100881, columnar 1725). On-disk format unchanged (public API still writes stable v3).</p>
+</details>
+
+<details open style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;margin:10px 0">
+<summary><strong>v4.6.4 - 2026-10-01 - Library polish: python control, syntax, docs</strong></summary>
 <p class="mut">This update improves python control, syntax, and library shape - error hierarchy, public types, doc restructure. <strong>No new benchmark numbers by design: same bytes, all tables below stand.</strong> Reproduce: <code>python deep_compress/test_roundtrip.py</code>, <code>python deep_compress/test_c_equivalence.py</code> (both green).</p>
 </details>
 

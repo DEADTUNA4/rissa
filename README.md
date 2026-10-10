@@ -6,7 +6,7 @@
 
 `rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978.
 
-**Live docs → https://rissa.web.app - v4.6.4 - Apache 2.0**
+**Live docs → https://rissa.web.app - v4.6.5 - Apache 2.0**
 
 > **The mark:** three overlapping lenses for the three layers - public API, containers, internals. The overlaps are where MDL selection happens; pale yellow on black is signal out of noise; round because lossless means what goes in comes back out. Full story: https://rissa.web.app/#mark.
 
@@ -75,7 +75,7 @@ not-yet-cross-platform** until someone verifies a build there.
 ```python
 import rissa
 data = open("telemetry.bin", "rb").read()
-compressed = rissa.compress(data, level=3)  # 1:3 2:6 3:19 4:22
+compressed = rissa.compress(data, level=3)  # 1-4 portable: zstd 3/6/19/22, zlib 1/6/9/9, lzma 0/3/9/9
 assert rissa.decompress(compressed) == data
 ```
 
