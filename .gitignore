@@ -33,8 +33,14 @@ build/
 Thumbs.db
 .firebase/
 
+# Website (https://rissa.web.app) is deployed from local files only - not part
+# of the library repo. Keep the site checkout next to this one or in public/.
+public/
+firebase.json
+favicon_io.zip
+
 # Firebase web config holds a browser key - never commit the real file.
-# See public/firebase-config.example.js for the tracked template.
+# The template lives in the local (untracked) public/firebase-config.example.js.
 public/firebase-config.js
 
 rissa/*.pyd

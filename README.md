@@ -1,6 +1,6 @@
 # rissa
 
-![rissa logo - three overlapping lenses](public/logo.png)
+![rissa logo - three overlapping lenses](logo.png)
 
 **Context-Selecting Compression Engine for Structured, Sensor, and Columnar Data**
 
