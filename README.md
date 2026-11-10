@@ -6,7 +6,7 @@
 
 `rissa` pays homage to **Jorma Rissanen** - Minimum Description Length (MDL) 1978.
 
-**Live docs → https://rissa.web.app - v4.6.5 - Apache 2.0**
+**Live docs → https://rissa.web.app - v4.6.6 - Apache 2.0**
 
 > **The mark:** three overlapping lenses for the three layers - public API, containers, internals. The overlaps are where MDL selection happens; pale yellow on black is signal out of noise; round because lossless means what goes in comes back out. Full story: https://rissa.web.app/#mark.
 
@@ -70,6 +70,37 @@ Platform status, stated plainly: **Windows + MinGW-w64
 published wheels - AVX2 binaries fault on older CPUs). **Linux/Mac builds are
 not-yet-cross-platform** until someone verifies a build there.
 
+Sanitizer build for security work (4.6.6), same opt-in pattern:
+
+```bash
+RISSA_SANITIZE=1 python setup.py build_ext --inplace   # ASan + UBSan
+```
+
+Never ship these objects - they link the sanitizer runtimes and run slower.
+They also need a toolchain that actually ships those runtimes (w64devkit does
+not; a full MinGW-w64 or WSL GCC does).
+
+## Decompressing untrusted input
+
+The compressed stream is treated as attacker-controlled (4.6.6). Guards are
+reader-side only: the byte format, `MAGIC` and the transform table are
+unchanged, and every valid stream decodes byte-identically.
+
+- **Per-block bomb guard** (`deep_compress/bounds.py`): backend output is
+  capped at `orig_len × expansion(TID)` (1x identity, 2x `BWT_MTF_RLE`,
+  3x `RLE`) plus 64B, and at a 1GB absolute block cap. A payload that would
+  expand past that raises `OutputLimitError` *before* the memory exists.
+  `RISSA_MAX_BLOCK_OUTPUT` overrides the absolute cap in bytes; `0` disables
+  it (ratio caps stay on).
+- **Whole-stream ceiling:** `rissa.decompress(data, max_output_size=256 << 20)`,
+  or `rissa -d in.rissa -o out.bin --max-output 256` (MB).
+- **v4 header dict** is bounded to 1MB and cross-checked against `DICT_LEN`.
+- **Telling fast from slow:** C extensions are used when present, but a
+  C error now propagates instead of silently rerunning the Python
+  implementation, so both paths reject the same malformed input the same way.
+- **Do not ignore `OutputLimitError`:** it means the stream is malformed or
+  exceeds the ceiling you set, never that a valid file was rejected.
+
 ## Basic usage
 
 ```python
@@ -85,7 +116,7 @@ rissa -d output.rissa -o restored.bin
 rissa input.bin -o output.rissa --block 1048576 --dict  # shared dict
 ```
 
-More → [`GUIDE.md`](GUIDE.md) · [`FORMAT.md`](FORMAT.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DEVELOPER.md`](DEVELOPER.md)
+More → [`GUIDE.md`](GUIDE.md) · [`FORMAT.md`](FORMAT.md) · [`deep_compress/ARCHITECTURE.md`](deep_compress/ARCHITECTURE.md) · [`DEVELOPER.md`](DEVELOPER.md)
 
 ## Benchmarks
 
@@ -116,6 +147,7 @@ Reproduce:
 ```bash
 python deep_compress/download_corpora.py
 python deep_compress/test_roundtrip.py  # 19T + 200 fuzz
+python deep_compress/test_adversarial.py  # decode guards + C-vs-Python error parity
 python deep_compress/final_bench.py
 ```
 
