@@ -34,6 +34,10 @@ try:
     from .huffman import huffman_encode_block, huffman_decode_block
 except ImportError:
     from huffman import huffman_encode_block, huffman_decode_block
+try:
+    from .bounds import decode_backend_block, check_orig_len, check_total, decode_dict_bounded
+except ImportError:
+    from bounds import decode_backend_block, check_orig_len, check_total, decode_dict_bounded
 
 MAGIC = b"RISA"
 VERSION = 4  # Frozen at 4 for stable format v1.0 spec - future changes must be backward compatible, old .rissa files always decodable via fallback to v3/v2
@@ -517,7 +521,12 @@ def compress_v4(data: bytes, backend: "Backend" = "lzma", level: int | None = 9,
         pass
     return bytes(out), Counter(chosen), dict_to_use
 
-def decompress_v4(data: bytes):
+def decompress_v4(data: bytes, max_output_size: int | None = None):
+    """Decompress a v4 .rissa container.
+
+    max_output_size (bytes, optional, 4.6.6): whole-stream decoded-size cap on
+    top of the always-on per-block guard; see bounds.py / FORMAT.md.
+    """
     import lzma
     import zlib
     try:
@@ -534,7 +543,7 @@ def decompress_v4(data: bytes):
             from .compressor_v3 import decompress_with_dict
         except ImportError:
             from deep_compress.compressor_v3 import decompress_with_dict
-        return decompress_with_dict(data)
+        return decompress_with_dict(data, max_output_size=max_output_size)
     pos=4
     def _need(n, what):
         nonlocal pos
@@ -567,17 +576,31 @@ def decompress_v4(data: bytes):
     dict_bytes=None
     if dict_comp_len:
         dict_compressed=_need(dict_comp_len, "dict")
+        # 4.6.6: the header dict is bounded and cross-checked against DICT_LEN
+        # (before this, DICT_LEN was read but never validated and the lzma
+        # decode of the dict was unbounded - a decompression-bomb vector via
+        # the dict itself, every later block then loads the giant preset_dict).
         try:
-            dict_bytes=lzma.decompress(dict_compressed)
-        except Exception as e:
-            note("v4d dict fallback to raw", e)
-            dict_bytes=dict_compressed
+            dict_bytes=decode_dict_bounded(dict_compressed, dict_orig_len, "v4 header dict")
+        except ValueError as e:
+            # historical fallback: pre-4.6.6 writers could store the dict RAW
+            # (len matches, no lzma wrapper) - keep decoding those. Any other
+            # failure (size mismatch, over-cap) now raises, it used to fall
+            # back silently to garbage-dict decoding.
+            note("v4d dict fallback", e)
+            if len(dict_compressed) == dict_orig_len:
+                dict_bytes=dict_compressed
+            else:
+                raise
     out=bytearray()
+    total_out=0
     prev_block_raw=b""
     for bi in range(num_blocks):
         tid=_need(1, f"block {bi} transform id")[0]
         extra_len=_need(1, f"block {bi} extra length")[0]
         orig_len=struct.unpack(">I", _need(4, f"block {bi} orig length"))[0]
+        # 4.6.6 runtime guards (see decompress_with_dict in compressor_v3)
+        bound=check_orig_len(orig_len, tid, f"block {bi}")
         if backend == "huffman":
             # Huffman block layout mirrors v3: pad + 256 freq + enc_len + extra + payload.
             if tid in (99, 100):
@@ -599,6 +622,8 @@ def decompress_v4(data: bytes):
                 raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
             out.extend(block)
             prev_block_raw = block
+            total_out += len(block)
+            check_total(total_out, max_output_size, f"container after block {bi+1}")
             continue
         comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
         extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
@@ -607,13 +632,7 @@ def decompress_v4(data: bytes):
         if tid == 99: # XOR_PREV
             # Decompress then XOR decode
             if backend=="lzma":
-                try:
-                    if dict_bytes:
-                        transformed=lzma.decompress(comp, preset_dict=dict_bytes)
-                    else:
-                        transformed=lzma.decompress(comp)
-                except TypeError:
-                    transformed=lzma.decompress(comp)
+                transformed=decode_backend_block(comp, "lzma", bound, lzma_preset_dict=dict_bytes)
             else:
                 transformed=comp
             # XOR decode
@@ -622,45 +641,30 @@ def decompress_v4(data: bytes):
                 raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
             out.extend(block)
             prev_block_raw = block
+            total_out += len(block)
+            check_total(total_out, max_output_size, f"container after block {bi+1}")
             continue
         elif tid == 100: # BIT_PLANE
             if backend=="lzma":
-                try:
-                    if dict_bytes:
-                        transformed=lzma.decompress(comp, preset_dict=dict_bytes)
-                    else:
-                        transformed=lzma.decompress(comp)
-                except Exception as e:
-                    note("v4d bit-plane dict fallback", e)
-                    transformed=lzma.decompress(comp)
-            else:
-                transformed=comp
+                transformed=decode_backend_block(comp, "lzma", bound, lzma_preset_dict=dict_bytes)
             block = bit_plane_separation_decode(transformed)
             if len(block) != orig_len:
                 raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
             out.extend(block)
             prev_block_raw = block
+            total_out += len(block)
+            check_total(total_out, max_output_size, f"container after block {bi+1}")
             continue
         # Normal
         if tid not in TRANSFORMS_V2:
             raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19, 99, 100)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
         if backend=="lzma":
-            try:
-                if dict_bytes:
-                    try:
-                        transformed=lzma.decompress(comp, preset_dict=dict_bytes)
-                    except TypeError:
-                        transformed=lzma.decompress(comp)
-                else:
-                    transformed=lzma.decompress(comp)
-            except Exception as e:
-                note("v4d lzma retry without dict", e)
-                transformed=lzma.decompress(comp)
+            transformed=decode_backend_block(comp, "lzma", bound, lzma_preset_dict=dict_bytes)
         elif backend=="zlib":
-            transformed=zlib.decompress(comp)
+            transformed=decode_backend_block(comp, "zlib", bound)
         elif backend=="zstd":
-            transformed=zstd.ZstdDecompressor().decompress(comp) if has_zstd else zlib.decompress(comp)
+            transformed=decode_backend_block(comp, "zstd", bound, has_zstd=has_zstd) if has_zstd else decode_backend_block(comp, "zlib", bound)
         else:
             raise FormatError(f"invalid backend {backend!r} in block {bi} (huffman uses its own block layout)")
         # Need extra handling for transforms that need extra
@@ -672,6 +676,8 @@ def decompress_v4(data: bytes):
             raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
         out.extend(block)
         prev_block_raw = block
+        total_out += len(block)
+        check_total(total_out, max_output_size, f"container after block {bi+1}")
     if pos != len(data):
         raise FormatError(f"trailing data: {len(data) - pos}B after {num_blocks} blocks (file likely corrupt)")
     return bytes(out)

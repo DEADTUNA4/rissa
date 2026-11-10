@@ -7,9 +7,16 @@ from setuptools import setup, Extension
 # must use the portable baseline. The 141-308x wins were measured with
 # w64devkit GCC 16.2 on x86-64 with RISSA_NATIVE=1.
 # MSVC path (/O2 /arch:AVX2) only with explicit --compiler=msvc (opt-in).
+# RISSA_SANITIZE=1: ASan + UBSan build for the security test loop only.
+# Never ship these objects: they link the sanitizer runtime and are slower.
 _native = os.environ.get("RISSA_NATIVE") == "1"
+_sanitize = os.environ.get("RISSA_SANITIZE") == "1"
 _args = " ".join(sys.argv)
-if "--compiler=msvc" in _args or "msvc" in _args:
+sanitize_args = ['-O1', '-g', '-fsanitize=address,undefined',
+                 '-fno-omit-frame-pointer', '-fno-sanitize-recover=all']
+if _sanitize:
+    compile_args = sanitize_args  # sanitizer build always wins over native
+elif "--compiler=msvc" in _args or "msvc" in _args:
     compile_args = ['/O2', '/arch:AVX2']  # explicit MSVC path (opt-in)
 elif sys.platform == "win32":
     compile_args = ['-O3']  # MinGW path, see setup.cfg; portable baseline

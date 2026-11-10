@@ -412,12 +412,22 @@ static PyObject* t_rle0_decode(PyObject* self, PyObject* args) {
         /* NOTE: replicates Python quirk exactly: marker only if i+4 < n (strict) */
         if (i + 4 < n && d[i] == 0 && d[i + 1] == 0 && d[i + 2] == 0 && d[i + 3] == 0) {
             Py_ssize_t run = d[i + 4] + 4;
-            while (w + run > cap) { cap *= 2; _PyBytes_Resize(&out, cap); o = (unsigned char *)PyBytes_AS_STRING(out); }
+            while (w + run > cap) {
+                cap *= 2;
+                /* 4.6.6: check the resize. An unchecked failure left o=NULL and
+                 * the next memcpy/memstore was a guaranteed NULL deref. */
+                if (_PyBytes_Resize(&out, cap) < 0) return NULL;
+                o = (unsigned char *)PyBytes_AS_STRING(out);
+            }
             memset(o + w, 0, (size_t)run);
             w += run;
             i += 5;
         } else {
-            if (w >= cap) { cap *= 2; _PyBytes_Resize(&out, cap); o = (unsigned char *)PyBytes_AS_STRING(out); }
+            if (w >= cap) {
+                cap *= 2;
+                if (_PyBytes_Resize(&out, cap) < 0) return NULL;
+                o = (unsigned char *)PyBytes_AS_STRING(out);
+            }
             o[w++] = d[i];
             i++;
         }

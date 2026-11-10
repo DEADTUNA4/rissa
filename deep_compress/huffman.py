@@ -80,11 +80,12 @@ def huffman_encode_block(data: bytes):
     tree = build_tree(freq)
     codes = build_codes(tree)
     if HAS_C_HUFF:
-        try:
-            cl = [codes.get(i, "") for i in range(256)]
-            encd, padding = rissa.c_huff.pack(data, cl)
-            return bytes(encd), freq, padding, codes
-        except: pass
+        # 4.6.6: no bare-except fallback. If the C path raises, propagate -
+        # silently rerunning a DIFFERENT Python implementation masked bugs and
+        # produced error-path divergence between fast/slow builds.
+        cl = [codes.get(i, "") for i in range(256)]
+        encd, padding = rissa.c_huff.pack(data, cl)
+        return bytes(encd), freq, padding, codes
     # build bitstring
     bit_str = "".join(codes[b] for b in data)
     padding = (8 - len(bit_str) % 8) % 8
@@ -101,11 +102,12 @@ def huffman_decode_block(encoded: bytes, freq, padding, original_len):
     if tree is None:
         return b""
     if HAS_C_HUFF:
-        try:
-            codes = build_codes(tree)
-            cl = [codes.get(i, "") for i in range(256)]
-            return bytes(rissa.c_huff.unpack(encoded, cl, padding, original_len))
-        except: pass
+        # 4.6.6: no bare-except fallback (see huffman_encode_block). The C and
+        # Python paths share build_codes/tree, so an exception here means the
+        # input is broken - surfacing it is the correct behavior.
+        codes = build_codes(tree)
+        cl = [codes.get(i, "") for i in range(256)]
+        return bytes(rissa.c_huff.unpack(encoded, cl, padding, original_len))
     # convert to bitstring
     bit_str = "".join(f"{b:08b}" for b in encoded)
     if padding:
@@ -124,10 +126,9 @@ def huffman_decode_block(encoded: bytes, freq, padding, original_len):
 def shannon_entropy(data: bytes) -> float:
     """Shannon entropy in bits/symbol. Home for tools/rissa_tool.py after archive/rans.py retirement."""
     if HAS_C_STAT:
-        try:
-            _, ent = rissa.c_stat.hist_entropy(data)
-            return float(ent)
-        except: pass
+        # 4.6.6: no bare-except fallback (see huffman_encode_block)
+        _, ent = rissa.c_stat.hist_entropy(data)
+        return float(ent)
     import math
     from collections import Counter
     if not data:

@@ -6,7 +6,7 @@ Public API (stable): compress() writes the v3 container; decompress() reads
 any version (v2/v3/v4 dispatch). Containers: v3 default, v4 opt-in via
 deep_compress.compressor_v4. Internals: deep_compress.* (escape hatches).
 """
-__version__ = "4.6.5"
+__version__ = "4.6.6"
 __author__ = "rissa (Rissanen MDL 1978)"
 import os
 import sys
@@ -63,12 +63,16 @@ def compress(data: bytes, level: int = 3, block_size: int = 65536, use_dict: boo
     comp, _, _ = compress_with_dict(data, backend=backend, level=lvl, block_size=block_size, use_dict=use_dict, fast=fast)
     return comp
 
-def decompress(data: bytes) -> bytes:
+def decompress(data: bytes, max_output_size: int | None = None) -> bytes:
     """Decompress a .rissa container of any version (v2/v3/v4 dispatch).
 
+    max_output_size (optional, 4.6.6): total decoded-size ceiling in bytes.
     Raises:
         TruncatedError: file ends mid-field (never partial output).
         FormatError: bad magic/version/ids or cross-format feeds.
+        OutputLimitError (4.6.6): a block would decode past its per-block
+            guard, or the stream exceeds max_output_size. Runtime guard only;
+            no valid stream can hit it.
     """
     # Dispatch on container version: v4 layout differs (8B dict header), so a
     # single decoder would misread the other version. Legacy magics go to v3
@@ -78,8 +82,8 @@ def decompress(data: bytes) -> bytes:
             from deep_compress.compressor_v4 import decompress_v4
         except ImportError:
             from compressor_v4 import decompress_v4
-        return decompress_v4(data)
+        return decompress_v4(data, max_output_size=max_output_size)
     from deep_compress.compressor_v3 import decompress_with_dict
-    return decompress_with_dict(data)
+    return decompress_with_dict(data, max_output_size=max_output_size)
 
 __all__ = ["compress", "decompress"]

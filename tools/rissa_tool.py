@@ -70,7 +70,8 @@ def _excepthook(typ, val, tb):
     print(f"\nBUG? {report_bug(str(val))}", file=sys.stderr)
 sys.excepthook = _excepthook
 
-from deep_compress.compressor_v3 import compress_with_dict, decompress_with_dict
+from deep_compress import decompress as _decompress_api
+from deep_compress.compressor_v3 import compress_with_dict
 from deep_compress.huffman import shannon_entropy
 
 def cli_compress(inp, out, block, use_dict, backend="zstd", fast=False):
@@ -91,7 +92,9 @@ def cli_decompress(inp, out):
     lg.info(f"decompress in={inp} out={out}")
     data = pathlib.Path(inp).read_bytes()
     t0=time.perf_counter()
-    dec = decompress_with_dict(data)
+    # 4.6.6: dispatch v2/v3/v4 like the public API (v4 files used to raise
+    # "use decompress_v4" here); max_output_size stays at the per-block guard.
+    dec = _decompress_api(data)
     t=time.perf_counter()-t0
     pathlib.Path(out).write_bytes(dec)
     print(f"rissa decompress: {len(data)} -> {len(dec)} time {t:.2f}s -> {out}")
@@ -221,7 +224,8 @@ def launch_gui():
         try:
             inp=var_in.get(); out=var_out.get()
             data=pathlib.Path(inp).read_bytes()
-            dec=decompress_with_dict(data)
+            # 4.6.6: version dispatcher (v2/v3/v4) + per-block guards
+            dec=_decompress_api(data)
             pathlib.Path(out).write_bytes(dec)
             glog(f"Decompress {len(data)} -> {len(dec)} -> {out}")
             log.see("end")

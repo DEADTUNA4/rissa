@@ -8,6 +8,9 @@ test-suite) keep working unchanged.
 - :class:`TruncatedError` - file/stream ends mid-field. Never silent partial output.
 - :class:`FormatError` - wrong magic, version, backend/transform id, bad
   counts, cross-format feeds (stream bytes to a normal decoder, ...).
+- :class:`OutputLimitError` (4.6.6) - a block or stream would decode past its
+  declared/plausible size (decompression-bomb guard in bounds.py). Runtime
+  guard only: the on-disk format is unchanged, and no valid stream can hit it.
 - Backend library errors (``lzma.LZMAError``, ``zstandard.ZstdError``) are
   NOT wrapped: they already mean "corrupt payload" precisely.
 """
@@ -24,3 +27,7 @@ class TruncatedError(RissaError, EOFError):
 
 class FormatError(RissaError, ValueError):
     """Magic, version, id, count, or layout is not a valid .rissa file."""
+
+
+class OutputLimitError(FormatError):
+    """A block or stream would decode past its declared/plausible size."""

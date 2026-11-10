@@ -49,8 +49,10 @@ static PyObject* s_hist_entropy(PyObject* self, PyObject* args) {
     return ret;
 }
 
-typedef struct { uint64_t key; int first; } PosRec;
-typedef struct { uint64_t key; int count; int first; } GrpRec;
+typedef struct { uint64_t key; Py_ssize_t first; } PosRec;
+typedef struct { uint64_t key; Py_ssize_t count; Py_ssize_t first; } GrpRec;
+/* 4.6.6: first/count were int and truncated silently past 2^31 positions.
+ * Internal structs, so widening is wire-neutral. */
 
 static int cmp_pos(const void *a, const void *b) {
     const PosRec *x = (const PosRec *)a, *y = (const PosRec *)b;
@@ -81,7 +83,7 @@ static PyObject* s_rank_ngrams(PyObject* self, PyObject* args) {
         uint64_t k = 0;
         memcpy(&k, d + i, (size_t)window);
         arr[i].key = k;
-        arr[i].first = (int)i;
+        arr[i].first = (Py_ssize_t)i;
     }
     qsort(arr, (size_t)m, sizeof(PosRec), cmp_pos);
 
@@ -98,7 +100,7 @@ static PyObject* s_rank_ngrams(PyObject* self, PyObject* args) {
         }
         if ((j - i) >= min_count) {
             gr[ng].key = arr[i].key;
-            gr[ng].count = (int)(j - i);
+            gr[ng].count = (j - i);
             gr[ng].first = first;
             ng++;
         }

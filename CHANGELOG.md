@@ -2,6 +2,29 @@
 
 **https://rissa.web.app - Apache 2.0 - `rissa-compress`**
 
+## v4.6.6 - 2026-11-10 - security audit: decode guards, bomb caps, C hardening, error-path parity
+
+**On-disk format unchanged by design: the public API still writes stable v3 for backwards compatibility, v4 stays frozen and opt-in. A newer library release does not mean a newer format. All valid streams decode to byte-identical output.**
+
+Threat model: the attacker controls the compressed byte stream and wants memory corruption (RCE), DoS (OOM/CPU exhaustion), or information disclosure. This release is the backwards-compatible hardening pass against it: every fix below changes only behavior for malformed streams.
+
+- **Decompression-bomb guards** (new `deep_compress/bounds.py`, wired into all four decoders v2/v3/v4/stream): backend output is bounded to what a stream written by this project could possibly need for that block before any allocation. Expansion caps per TID (identity family 1x, `BWT_MTF_RLE` 2x, `RLE` 3x) plus an absolute per-block cap of 1GB (`RISSA_MAX_BLOCK_OUTPUT` env override, `"0"` disables). Previously an attacker-declared small block carried a payload that zstd/lzma/zlib deterministically expanded to gigabytes before the `ORIG_LEN` cross-check could run - the classic DoS the CPython `zipfile`/`bz2` fixes addressed. Valid streams never hit a cap (largest legal writer output is a 15MB `max_block` v4 block).
+- **OutputLimitError** (`deep_compress/errors.py`, subclass of `ValueError` like `FormatError`): raised when a block would decode past its per-block guard or a stream past an explicit `max_output_size`. Optional `max_output_size` (bytes) added to every decode entry: `rissa.decompress`, `deep_compress.decompress`, `decompress_with_dict`, `decompress_v4`, `decompress_with_backend`, `decompress_stream`, plus `rissa --max-output` (MB) on the CLI.
+- **v4 header dict hardened** (`deep_compress/compressor_v4.py`): `DICT_LEN` was read but never validated and the lzma decode of the header dict was unbounded - a small container could speculatively expand the dict to gigabytes and every later block then loads it as `preset_dict`/zstd dict. Now bounded (`MAX_DICT_BYTES` 1MB; valid writers store at most 32768B) and cross-checked against `DICT_LEN`; raw-dict files from old writers still decode when lengths match.
+- **Streaming decoder no longer silently truncates** (`deep_compress/compressor_v3.py`): `decompress_stream` sliced frame output to `[:orig_len]`, diverging from the FORMAT.md contract all other decoders follow. Now the same loud `FormatError` on length mismatch. Valid streams are byte-identical.
+- **C extension hardening** (all six rebuilt in-tree, portable baseline):
+  - `c_trans.c` `rle_zero_decode`/`c_huff.c` `unpack`: unchecked `_PyBytes_Resize` return values left `out=NULL` with the exception set and the next store dereferenced NULL - a guaranteed hard crash on allocation failure. Both now propagate (`-1` checked, `return NULL`).
+  - `c_huff.c` `load_codes`: on the `PyUnicode_AsUTF8AndSize` failure path the code read an *uninitialized* size (`!p && L != 0` checked L after failure) and could hand back a NULL code string; now checks `PyErr_Occurred` and falls back to empty code entries explicitly.
+  - `c_huff.c` `pack`: rejects coded-bit totals that would not fit a `Py_ssize_t` allocation instead of letting the wrapped conversion produce a negative length.
+  - `c_shuffle.c` `shuffle`: `stride*2` was `int` arithmetic (signed overflow UB for large strides, parity with `c_trans` now: negative/zero strides fall back to 4, widths compared in `Py_ssize_t`).
+  - `c_stat.c` `rank_ngrams`: `first`/`count` were `int` and truncated silently past 2^31 positions; both widened to `Py_ssize_t` (internal struct, wire-neutral).
+- **Error-path parity, C vs Python:** removed the bare `except Exception: pass` swallow-and-fallback around `rissa.c_huff.pack/unpack` in `deep_compress/huffman.py` - a failing C path silently reran a *different* Python implementation (the bz2-reuse bug class: weaker behavior reachable by forcing the fallback). Now missing extensions = Python path, but a present extension that raises = the exception propagates. Verified both modes raise the same exception type for malformed containers (`test_adversarial.py`).
+- **Stream dict cap:** `decompress_stream` accepts at most 1MB of header dict, matching `MAX_DICT_BYTES`.
+- **Tooling:** `tools/rissa_tool.py` and `rissa -d` route decompression through the version dispatcher (v4 files previously failed with "use decompress_v4()" even though the public API handled them); the desktop GUI path likewise. `rissa --max-output MB` guards untrusted decompression.
+- **`python -m rissa` fixed:** `rissa/__main__.py` imported `deep_compress.rissa` which does not exist; it crashed on first run. Now imports `deep_compress.cli.main`.
+- **Sanitizer build flag:** `RISSA_SANITIZE=1` on `setup.py` injects `-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all` (GCC/MinGW path) for the fuzz/ASan loop - same opt-in pattern as `RISSA_NATIVE=1`, never for published wheels. Needs a toolchain with the sanitizer runtimes (w64devkit does not ship them).
+- **New test suite** `deep_compress/test_adversarial.py` (plain script, CI style like `test_roundtrip.py`): bomb-shape containers (raw/RLE/huffman-over-cap), `max_output_size` ceilings, v4 dict mismatch/over-cap, stream strictness, C-vs-Python error equality on adversarial input, v2/v3/v4 valid-stream roundtrips under guards, truncation regression. Green. `test_roundtrip.py` + `test_c_equivalence.py` remain green with the rebuilt extensions.
+
 ## v4.6.5 - 2026-10-10 - v4 huffman fix, decoder hardening, portable levels
 
 **On-disk format unchanged by design: the public API still writes stable v3 for backwards compatibility, v4 stays frozen and opt-in. A newer library release does not mean a newer format.**

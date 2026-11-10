@@ -63,11 +63,12 @@ rissa.compress(
 ### `rissa.decompress()`
 
 ```python
-rissa.decompress(data: bytes) -> bytes  # any version: v2/v3/v4 dispatch on the VER byte
+rissa.decompress(data: bytes, max_output_size: int | None = None) -> bytes  # any version: v2/v3/v4 dispatch on the VER byte
 ```
 
 - `data`: bytes starting with `RISA` (any version) or legacy `DCM2`/`DCM3`/`DCMP`.
-- Returns the original bytes; raises `TruncatedError` (file ends mid-field, never partial output) or `FormatError` (bad magic/version/ids, cross-format feeds). Both subclass the matching builtins (`EOFError`, `ValueError`) and derive from `RissaError` (`deep_compress/errors.py`).
+- `max_output_size` (4.6.6, optional): whole-stream decoded-size ceiling in bytes (default `None`). On top of the always-on per-block guard (`deep_compress/bounds.py`): a block whose payload would decode past its per-TID expansion bound or 1GB raises `OutputLimitError` before the memory is allocated. Runtime guard only - the on-disk format is unchanged and no valid stream can hit either cap.
+- Returns the original bytes; raises `TruncatedError` (file ends mid-field, never partial output), `FormatError` (bad magic/version/ids, cross-format feeds) or `OutputLimitError` (decode guard fired). All subclass the matching builtins (`EOFError`, `ValueError`) and derive from `RissaError` (`deep_compress/errors.py`).
 - `__all__ = ["compress", "decompress"]`.
 
 ---

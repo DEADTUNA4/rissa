@@ -27,6 +27,10 @@ try:
     from .huffman import huffman_encode_block, huffman_decode_block
 except ImportError:
     from huffman import huffman_encode_block, huffman_decode_block
+try:
+    from .bounds import decode_backend_block, check_orig_len, check_total, OutputLimitError, MAX_DICT_BYTES
+except ImportError:
+    from bounds import decode_backend_block, check_orig_len, check_total, OutputLimitError, MAX_DICT_BYTES
 
 BLOCK_SIZE_64K = 65536
 BLOCK_SIZE_128K = 131072
@@ -342,7 +346,13 @@ def compress_with_dict(data: bytes, backend: "Backend" = "zstd", level: int | No
     from collections import Counter
     return bytes(out), Counter(chosen), dict_bytes
 
-def decompress_with_dict(data: bytes):
+def decompress_with_dict(data: bytes, max_output_size: int | None = None):
+    """Decompress a v3 (or v2/DCM2-legacy) .rissa container.
+
+    max_output_size (bytes, optional): total decoded-size ceiling. The
+    per-block guard (bounds.py) is always on; this adds a whole-stream cap.
+    Valid streams are unaffected either way.
+    """
     import lzma
     import zlib
     try:
@@ -356,7 +366,7 @@ def decompress_with_dict(data: bytes):
                 from .compressor_v2 import decompress_with_backend
             except ImportError:
                 from deep_compress.compressor_v2 import decompress_with_backend
-            return decompress_with_backend(data)
+            return decompress_with_backend(data, max_output_size=max_output_size)
         raise FormatError(f"bad magic {data[:4]!r} expected RISA")
     pos=4
     def _need(n, what):
@@ -396,6 +406,7 @@ def decompress_with_dict(data: bytes):
         try: zstd_dict=zstd.ZstdCompressionDict(dict_bytes)
         except: pass
     out=bytearray()
+    total_out=0
     for bi in range(num_blocks):
         tid=_need(1, f"block {bi} transform id")[0]
         extra_len=_need(1, f"block {bi} extra length")[0]
@@ -403,6 +414,9 @@ def decompress_with_dict(data: bytes):
         if tid not in TRANSFORMS_V2:
             raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
+        # 4.6.6 runtime guards: reject impossible block sizes + bound backend
+        # output before decoding (decompression-bomb defense).
+        bound=check_orig_len(orig_len, tid, f"block {bi}")
         if backend=="huffman":
             pad=_need(1, f"block {bi} huffman padding")[0]
             freq=[struct.unpack(">H", _need(2, f"block {bi} huffman freq {i}"))[0] for i in range(256)]
@@ -421,13 +435,7 @@ def decompress_with_dict(data: bytes):
             comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
             extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
             comp=_need(comp_len, f"block {bi} payload")
-            if backend=="zlib": transformed=zlib.decompress(comp)
-            elif backend=="lzma": transformed=lzma.decompress(comp)
-            elif backend=="zstd":
-                if not has_zstd: transformed=zlib.decompress(comp)
-                else:
-                    dctx=zstd.ZstdDecompressor(dict_data=zstd_dict) if zstd_dict else zstd.ZstdDecompressor()
-                    transformed=dctx.decompress(comp)
+            transformed=decode_backend_block(comp, backend, bound, has_zstd=has_zstd, zstd_dict=zstd_dict)
             try:
                 block = dec_fn(transformed, extra)
             except Exception as e:
@@ -435,6 +443,8 @@ def decompress_with_dict(data: bytes):
             if len(block) != orig_len:
                 raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
             out.extend(block)
+        total_out += len(block)
+        check_total(total_out, max_output_size, f"container after block {bi+1}")
     if pos != len(data):
         raise FormatError(f"trailing data: {len(data) - pos}B after {num_blocks} blocks (file likely corrupt)")
     return bytes(out)
@@ -560,7 +570,9 @@ def compress_stream(in_stream, out_stream, backend="zstd", level=None, block_siz
             out_stream.write(best_extra)
             out_stream.write(best)
 
-def decompress_stream(in_stream, out_stream):
+def decompress_stream(in_stream, out_stream, max_output_size: int | None = None):
+    """Streaming decode, block by block. max_output_size (4.6.6) caps the total
+    bytes written across the stream; the per-block guard (bounds.py) is always on."""
     import zlib, lzma
     try:
         import zstandard as zstd
@@ -598,9 +610,12 @@ def decompress_stream(in_stream, out_stream):
     else:
         block_size=first  # legacy stream files (pre-sentinel): block size sits here
     dict_len=struct.unpack(">I", _sread(4, "dict length"))[0]
+    if dict_len > MAX_DICT_BYTES:
+        raise FormatError(f"streaming dict length {dict_len}B exceeds the dict guard {MAX_DICT_BYTES}B")
     dict_bytes=_sread(dict_len, "dict") if dict_len else None
     zstd_dict=zstd.ZstdCompressionDict(dict_bytes) if dict_bytes and has_zstd else None
     nblocks_out = 0
+    total_out = 0
     while True:
         hdr=in_stream.read(2)
         if not hdr:
@@ -615,12 +630,23 @@ def decompress_stream(in_stream, out_stream):
         extra=_sread(extra_len, "frame extra") if extra_len else b""
         comp=_sread(comp_len, "frame payload")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
-        if backend=="zlib": tr=zlib.decompress(comp)
-        elif backend=="lzma": tr=lzma.decompress(comp)
+        # 4.6.6 runtime guards (same contract as decompress_with_dict)
+        bound=check_orig_len(orig_len, tid, f"stream frame at block {nblocks_out}")
+        if backend=="zlib":
+            tr=decode_backend_block(comp, "zlib", bound)
+        elif backend=="lzma":
+            tr=decode_backend_block(comp, "lzma", bound)
         elif backend=="zstd":
-            dctx=zstd.ZstdDecompressor(dict_data=zstd_dict) if zstd_dict else zstd.ZstdDecompressor()
-            tr=dctx.decompress(comp)
-        out_stream.write(dec_fn(tr, extra)[:orig_len])
+            tr=decode_backend_block(comp, "zstd", bound, has_zstd=has_zstd, zstd_dict=zstd_dict)
+        block = dec_fn(tr, extra)
+        # 4.6.6: changed from silent [:orig_len] truncation to the FORMAT.md
+        # contract (mismatch raises, never partial output). Valid streams are
+        # unaffected.
+        if len(block) != orig_len:
+            raise FormatError(f"stream frame at block {nblocks_out} length mismatch: header says {orig_len}B, decoded {len(block)}B (file likely corrupt)")
+        out_stream.write(block)
+        total_out += len(block)
+        check_total(total_out, max_output_size, f"stream after block {nblocks_out+1}")
         nblocks_out += 1
 
 if __name__=="__main__":

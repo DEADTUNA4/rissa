@@ -21,8 +21,14 @@ static int load_codes(PyObject *codes, const char *cstr[256], Py_ssize_t clen[25
         if (!PyUnicode_Check(s)) return -1;
         Py_ssize_t L = 0;
         const char *p = PyUnicode_AsUTF8AndSize(s, &L);
-        if (!p && L != 0) return -1;
-        cstr[i] = p ? p : "";
+        /* 4.6.6: p==NULL with size 0 is a genuine error path; the old
+         * (!p && L != 0) check read L uninitialized on failure. */
+        if (!p) {
+            if (PyErr_Occurred()) return -1;
+            cstr[i] = ""; clen[i] = 0;
+            continue;
+        }
+        cstr[i] = p;
         clen[i] = L;
     }
     return 0;
@@ -41,6 +47,12 @@ static PyObject* h_pack_bytes(PyObject* self, PyObject* args) {
 
     unsigned long long total = 0;
     for (Py_ssize_t k = 0; k < n; k++) total += (unsigned long long)clen[d[k]];
+    /* 4.6.6: reject totals that would not fit a Py_ssize_t allocation instead
+     * of letting the wrapped conversion produce a negative out_len. */
+    if (total > (unsigned long long)PY_SSIZE_T_MAX - 8) {
+        PyErr_SetString(PyExc_ValueError, "huffman packed output too large");
+        return NULL;
+    }
     Py_ssize_t out_len = (Py_ssize_t)((total + 7) / 8);
     int padding = (int)((8 - (total % 8)) % 8);
     PyObject *out = PyBytes_FromStringAndSize(NULL, out_len);
@@ -129,7 +141,9 @@ static PyObject* h_unpack(PyObject* self, PyObject* args) {
         }
     }
     free(t);
-    if (w < orig_len) _PyBytes_Resize(&out, w);
+    /* 4.6.6: check the resize. An unchecked failure left out=NULL (with the
+     * exception set) and the caller returned a dangling buffer view. */
+    if (w < orig_len) { if (_PyBytes_Resize(&out, w) < 0) return NULL; }
     return out;
 }
 

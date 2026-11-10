@@ -1,5 +1,5 @@
 """rissa - https://rissa.web.app"""
-__version__ = "4.6.5"
+__version__ = "4.6.6"
 import os
 import sys
 _p = os.path.normpath(os.path.dirname(os.path.abspath(__file__)))
@@ -28,11 +28,11 @@ def compress(data: bytes, level: int = 3, **kw):
     comp, _, _ = compress_with_dict(data, level=lvl, **kw)
     return comp
 
-def decompress(data: bytes):
+def decompress(data: bytes, max_output_size: int | None = None):
     if len(data) >= 5 and data[:4] == b"RISA" and data[4] == 4:
         try:
             from .compressor_v4 import decompress_v4
-            return decompress_v4(data)
+            return decompress_v4(data, max_output_size=max_output_size)
         except ImportError:
             pass
-    return decompress_with_dict(data)
+    return decompress_with_dict(data, max_output_size=max_output_size)

@@ -87,7 +87,47 @@ Cost for `TID 15` is currently `1+len(extra)` single-T MDL - general `T1→T2` s
 - **Dictionary:** `DICT_COMP` is `lzma` compressed `64KB` from `build_lzma_dict` (8-byte freq or CDC `hash & 0xFFF`). Stored once, used as `preset_dict` for all blocks via `lzma.compress(..., preset_dict=dict)`. MDL-gated: only if `with+dict < without`.
 - **Streaming:** `compress_stream(in, out, block_size=131072)` writes the `STREAM_SENTINEL` header above (not "same header"). `xor_prev_block` disabled in `use_mp` to avoid silent wrong decode.
 - **Huffman tables:** 256× `>H` counts. Counts above 65535 (blocks >64KB of skewed data) are monotonically scaled to fit BEFORE the tree is built, so encoder and decoder always share the exact stored table - never truncated after the fact.
-- **Error behavior:** truncated files raise `EOFError` naming the field/offset (never partial output); unknown backend/transform IDs, bad versions, and cross-format feeds (v2↔v3↔v4, stream↔normal) raise `ValueError`. Decoded block length must equal `ORIG_LEN` else `ValueError` (no silent truncation); trailing bytes after the last block raise `ValueError`. Public `rissa.decompress` dispatches on the `VER` byte (4→v4, else v3 which delegates v2/DCM2 internally). Library releases (e.g. 4.6.5) do not change the on-disk format: the public API still writes stable v3, v4 stays frozen and opt-in.
+- **Error behavior:** truncated files raise `EOFError` naming the field/offset (never partial output); unknown backend/transform IDs, bad versions, and cross-format feeds (v2↔v3↔v4, stream↔normal) raise `ValueError`. Decoded block length must equal `ORIG_LEN` else `ValueError` (no silent truncation); trailing bytes after the last block raise `ValueError`. Public `rissa.decompress` dispatches on the `VER` byte (4→v4, else v3 which delegates v2/DCM2 internally). Library releases (e.g. 4.6.6) do not change the on-disk format: the public API still writes stable v3, v4 stays frozen and opt-in.
+
+## Runtime guards (4.6.6, not a format change)
+
+The compressed byte stream is an attack surface, so decoders cap what they
+will *allocate and decode* before trusting attacker-controlled length fields.
+These are reader-side runtime guards: **the byte layout, the MAGIC, the TID
+table, and every valid stream are untouched** - a file written by any past
+rissa version decodes byte-identically. Guards reject only streams that no
+writer of this project could have produced.
+
+- **Per-block expansion cap** (`deep_compress/bounds.py`): for each block the
+  backend payload may not decode to more than `orig_len * ratio(TID) + 64`
+  bytes, where `ratio` is the worst-case expansion of that transform's encode
+  side (1x for the identity family, 2x for `BWT_MTF_RLE`, 3x for `RLE`). The
+  backend decode itself is bounded (`zlib.decompressobj(max_length)`,
+  `LZMADecompressor(max_length)`, `zstd stream_reader`), so a decompression
+  bomb never materializes: growth past the cap raises `OutputLimitError`
+  (ValueError subclass) before the big output exists.
+- **Per-block absolute cap:** `ORIG_LEN` above 1GB is rejected as implausible
+  (no valid writer output exceeds 15MB per block). `RISSA_MAX_BLOCK_OUTPUT`
+  overrides; value `0` disables the absolute cap (ratio caps remain).
+- **Whole-stream ceiling:** optional `max_output_size` (bytes) parameter on
+  every decode entry point (incl. `--max-output MB` on the CLI) raises
+  `OutputLimitError` once the accumulated output would exceed it. Off by
+  default (None), so default behavior for valid streams is unchanged.
+- **v4 header dict:** the decoded dict must be ≤ 1MB (`MAX_DICT_BYTES`; valid
+  writers store at most 32768B) and equal to the stored `DICT_LEN`, else
+  `ValueError`. Pre-4.6.6 raw-dict files still decode when lengths match.
+- **Streaming frames:** length mismatch now raises like every other decoder
+  (pre 4.6.6 the stream decoder silently sliced to `ORIG_LEN`); header dict
+  capped at `MAX_DICT_BYTES`.
+- **Error-path parity:** when a C extension is present and raises, the
+  exception propagates - the slower Python reimplementation is no longer run
+  as a silent fallback (fast/slow paths now reject the same malformed inputs
+  with the same exception types; `test_adversarial.py`).
+- **Fuzzing:** `python deep_compress/test_adversarial.py` (guards + parity);
+  `RISSA_SANITIZE=1 python setup.py build_ext --inplace` builds the C
+  extensions with ASan + UBSan (`-fsanitize-recover=none`) for the sanitizer
+  loop - same opt-in pattern as `RISSA_NATIVE=1`, never for published wheels,
+  and needs a toolchain that ships the sanitizer runtimes.
 - **Compatibility:** `decompress_v4` auto-migrates `DCM2`/`DCMP` → `RISA`. `VERSION` bump for breaking changes.
 
 ## Compatibility
@@ -95,4 +135,4 @@ Cost for `TID 15` is currently `1+len(extra)` single-T MDL - general `T1→T2` s
 - `v3` (`MAGIC DCM2` 64K/128K) → `v4` (`RISA` 1M/4M) decompressor accepts both (`compressor_v4.py:decompress_v4` falls back to `compressor_v3`).
 - Deterministic: sorted `TRANSFORMS_V2` iteration, no hash tie-break. Same input → same `.rissa`.
 
-Source: `deep_compress/compressor_v3.py`, `compressor_v4.py`, `transforms_v2.py` - Apache 2.0.
+Source: `deep_compress/compressor_v3.py`, `compressor_v4.py`, `transforms_v2.py`, `bounds.py` - Apache 2.0.

@@ -82,6 +82,7 @@ Memory contract: `compress_stream`/`decompress_stream` hold O(block_size) plus o
 
 - `rissa.compress(data, level=3, block_size=65536, backend="zstd", use_dict=False)` → `bytes` with `MAGIC RISA`
 - `rissa.decompress(data)` → `bytes`, auto-migrates `DCM2` legacy
+- `rissa.decompress(data, max_output_size=N)` (4.6.6) → same, plus a whole-stream decoded-size ceiling; per-block bomb guards are always on (`deep_compress/bounds.py`), so decompressing untrusted bytes cannot balloon past the declared/plausible block sizes. Raises `OutputLimitError` (ValueError subclass) when a guard fires - no valid stream can trigger them
 - `compress_with_dict` returns `(bytes, Counter, dict_bytes)` for inspection
 - Deterministic: sorted `TRANSFORMS_V2` iteration, same input → same `.rissa`
 

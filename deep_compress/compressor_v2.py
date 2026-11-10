@@ -14,6 +14,10 @@ try:
 except ImportError:
     from transforms_v2 import TRANSFORMS_V2
 try:
+    from .bounds import decode_backend_block, check_orig_len, check_total
+except ImportError:
+    from bounds import decode_backend_block, check_orig_len, check_total
+try:
     from .huffman import huffman_encode_block, huffman_decode_block
 except ImportError:
     from huffman import huffman_encode_block, huffman_decode_block
@@ -141,7 +145,9 @@ def compress_with_backend(data: bytes, backend="zstd", level=None, block_size=BL
     hist = Counter(chosen)
     return bytes(out), hist
 
-def decompress_with_backend(data: bytes):
+def decompress_with_backend(data: bytes, max_output_size: int | None = None):
+    """Decompress a legacy v2 .rissa container. max_output_size (4.6.6) caps the
+    total decoded bytes (per-block guard from bounds.py is always on)."""
     import lzma, zlib
     try:
         import zstandard as zstd
@@ -171,6 +177,7 @@ def decompress_with_backend(data: bytes):
         raise FormatError(f"implausible block count {num_blocks} (file likely corrupt)")
     block_size=struct.unpack(">I", _need(4, "block size"))[0]
     out=bytearray()
+    total_out=0
     for bi in range(num_blocks):
         tid=_need(1, f"block {bi} transform id")[0]
         extra_len=_need(1, f"block {bi} extra length")[0]
@@ -178,6 +185,8 @@ def decompress_with_backend(data: bytes):
         if tid not in TRANSFORMS_V2:
             raise FormatError(f"invalid transform id {tid} in block {bi} (expected 0-19)")
         _, enc_fn, dec_fn = TRANSFORMS_V2[tid]
+        # 4.6.6 runtime guards (see decompress_with_dict in compressor_v3)
+        bound=check_orig_len(orig_len, tid, f"block {bi}")
         if backend=="huffman":
             padding=_need(1, f"block {bi} huffman padding")[0]
             freq=[struct.unpack(">H", _need(2, f"block {bi} huffman freq {i}"))[0] for i in range(256)]
@@ -196,16 +205,7 @@ def decompress_with_backend(data: bytes):
             comp_len=struct.unpack(">I", _need(4, f"block {bi} payload length"))[0]
             extra=_need(extra_len, f"block {bi} extra") if extra_len else b""
             comp=_need(comp_len, f"block {bi} payload")
-            if backend=="zlib":
-                transformed=zlib.decompress(comp)
-            elif backend=="lzma":
-                transformed=lzma.decompress(comp)
-            elif backend=="zstd":
-                if not has_zstd:
-                    transformed=zlib.decompress(comp)
-                else:
-                    dctx=zstd.ZstdDecompressor()
-                    transformed=dctx.decompress(comp)
+            transformed=decode_backend_block(comp, backend, bound, has_zstd=has_zstd)
             try:
                 final=dec_fn(transformed, extra)
             except Exception as e:
@@ -213,6 +213,8 @@ def decompress_with_backend(data: bytes):
             if len(final) != orig_len:
                 raise FormatError(f"block {bi} length mismatch: header says {orig_len}B, decoded {len(final)}B (file likely corrupt)")
             out.extend(final)
+        total_out += len(final)
+        check_total(total_out, max_output_size, f"container after block {bi+1}")
     if pos != len(data):
         raise FormatError(f"trailing data: {len(data) - pos}B after {num_blocks} blocks (file likely corrupt)")
     return bytes(out)

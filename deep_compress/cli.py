@@ -21,11 +21,17 @@ def main():
     p.add_argument("--backend", default="zstd", choices=["zstd","lzma","zlib","huffman"], help="backend")
     p.add_argument("--level", type=int, default=None, help="level (zstd 1-22, xz 0-9)")
     p.add_argument("--stream", action="store_true", help="streaming mode for large files (for block in stream)")
+    p.add_argument("--max-output", type=int, default=None, metavar="MB",
+                   help="decompress-only: reject streams decoding past this many MB (guard; default: per-block guard only)")
     args=p.parse_args()
-
     if args.decompress:
         data=pathlib.Path(args.input).read_bytes() if args.input != "-" else sys.stdin.buffer.read()
-        out=decompress_with_dict(data)
+        # dispatch v2/v3/v4 exactly like the public rissa.decompress
+        try:
+            from . import decompress
+        except ImportError:
+            from deep_compress import decompress
+        out=decompress(data, max_output_size=None if args.max_output is None else args.max_output*1024*1024)
         if args.output == "-":
             sys.stdout.buffer.write(out)
         else:

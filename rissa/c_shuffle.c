@@ -12,7 +12,8 @@ static PyObject* c_shuffle(PyObject* self, PyObject* args) {
     Py_ssize_t n;
     int stride = 4;
     if (!PyArg_ParseTuple(args, "y#|i", &data, &n, &stride)) return NULL;
-    if (n < stride*2) {
+    if (stride <= 0) stride = 4; /* parity with c_trans: negative/zero stride falls back */
+    if (n < (Py_ssize_t)stride * 2) { /* Py_ssize_t math: int*2 overflowed (UB) before */
         return PyBytes_FromStringAndSize(data, n);
     }
     PyObject *out = PyBytes_FromStringAndSize(NULL, n);
